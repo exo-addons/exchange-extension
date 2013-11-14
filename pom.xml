@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<artifactId>addons-parent-pom</artifactId>
+		<groupId>org.exoplatform.addons</groupId>
+		<version>2</version>
+	</parent>
+	<groupId>org.exoplatform.addons.exchange</groupId>
+	<artifactId>exchange-extension-parent</artifactId>
+	<version>1.0-SNAPSHOT</version>
+	<packaging>pom</packaging>
+	<name>eXo Platform - addons - Exchange extension - parent</name>
+	<description>eXo Platform - addons - Exchange extension - parent</description>
+	<developers>
+		<developer>
+			<id>boubaker</id>
+			<name>Boubaker KHANFIR</name>
+			<email>boubaker.khanfir@exoplatform.com</email>
+		</developer>
+	</developers>
+	<scm>
+		<connection>scm:git:git://github.com/exo-addons/exchange-application.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/exo-addons/exchange-application.git</developerConnection>
+		<url>https://github.com/exo-addons/exchange-application</url>
+	</scm>
+	<properties>
+		<maven.compiler.target>1.7</maven.compiler.target>
+		<maven.compiler.source>1.7</maven.compiler.source>
+		<org.exoplatform.platform.version>4.0.3</org.exoplatform.platform.version>
+		<com.microsoft.ews.version>1.2</com.microsoft.ews.version>
+		<jcifs.version>1.3.17</jcifs.version>
+		<lombok.version>0.11.6</lombok.version>
+		<slf4j.version>1.6.1</slf4j.version>
+	</properties>
+	<dependencyManagement>
+		<dependencies>
+			<!-- Import versions from platform project -->
+			<dependency>
+				<groupId>org.exoplatform.platform</groupId>
+				<artifactId>platform</artifactId>
+				<version>${org.exoplatform.platform.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.projectlombok</groupId>
+				<artifactId>lombok</artifactId>
+				<version>${lombok.version}</version>
+				<scope>provided</scope>
+			</dependency>
+			<dependency>
+				<groupId>jcifs</groupId>
+				<artifactId>jcifs</artifactId>
+				<version>${jcifs.version}</version>
+				<scope>provided</scope>
+			</dependency>
+			<dependency>
+				<groupId>com.microsoft.exchange</groupId>
+				<artifactId>exchange-ws-api</artifactId>
+				<version>${com.microsoft.ews.version}</version>
+				<scope>system</scope>
+				<systemPath>${project.build.directory}/../../packaging/src/main/assemblies/lib/EWSJavaAPI_1.2.jar</systemPath>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+	<modules>
+		<module>service</module>
+		<module>webapp</module>
+		<module>packaging</module>
+	</modules>
+</project>
