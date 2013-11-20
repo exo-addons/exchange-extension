@@ -74,6 +74,8 @@ function addExchangeButton() {
 		$(".ExchangeEditSettingsContent #domainName").val("");
 		$(".ExchangeEditSettingsContent #serverName").val("");
 		
+		$(".ExchangeEditSettingsSaveButton").removeAttr("disabled");
+		$(".ExchangeEditSettingsCancelButton").removeAttr("disabled");
     	$(".ExchangeEditSettingsContent input").removeAttr("style");
     	$(".ExchangeEditSettingsContent label").removeAttr("style");
 		
@@ -142,6 +144,8 @@ function addExchangeButton() {
 		if(exchangeSettingsNOK) {
 			return;
 		}
+		$(".ExchangeEditSettingsSaveButton").attr("disabled", "true");
+		$(".ExchangeEditSettingsCancelButton").attr("disabled", "true");
 		$.ajax({
 		    type: "POST",
 		    url: "/portal/rest/exchange/settings",
@@ -158,6 +162,8 @@ function addExchangeButton() {
 				$('.ExchangeSettingsButton').click();
 			},
 		    error: function(errMsg) {
+				$(".ExchangeEditSettingsSaveButton").removeAttr("disabled");
+				$(".ExchangeEditSettingsCancelButton").removeAttr("disabled");
 		    	if(errMsg.statusText) {
 			        alert(errMsg.statusText);
 		    	} else {

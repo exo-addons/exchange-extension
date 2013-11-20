@@ -111,7 +111,7 @@ public class IntegrationListener implements Startable {
     }
     if (schedulerDelayInSeconds < 10) {
       LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME + "is not correctly set. Use default: 30.");
-      schedulerDelayInSeconds = 30;
+      schedulerDelayInSeconds = 20;
     }
     if (params.containsKey(EXCHANGE_SYNCHRONIZE_ALL)) {
       String deleteExoCalendarOnUnsyncString = params.getValueParam(EXCHANGE_SYNCHRONIZE_ALL).getValue();
@@ -265,8 +265,7 @@ public class IntegrationListener implements Startable {
       this.username = identity.getUserId();
       this.firstSynchronization = true;
 
-      ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP2, TimeZone.getDefault());
-      service.setTimeout(20000);
+      ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP1, TimeZone.getDefault());
       ExchangeCredentials credentials = new WebCredentials(exchangeUsername + "@" + exchangeDomain, exchangePassword);
       service.setCredentials(credentials);
       service.setUrl(new URI(exchangeServerURL));
