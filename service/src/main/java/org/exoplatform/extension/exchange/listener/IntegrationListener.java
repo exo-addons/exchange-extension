@@ -111,7 +111,7 @@ public class IntegrationListener implements Startable {
     }
     if (schedulerDelayInSeconds < 10) {
       LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME + "is not correctly set. Use default: 30.");
-      schedulerDelayInSeconds = 20;
+      schedulerDelayInSeconds = 30;
     }
     if (params.containsKey(EXCHANGE_SYNCHRONIZE_ALL)) {
       String deleteExoCalendarOnUnsyncString = params.getValueParam(EXCHANGE_SYNCHRONIZE_ALL).getValue();
