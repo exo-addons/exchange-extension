@@ -82,6 +82,11 @@ public class ExchangeStorageService implements Serializable {
    */
   public boolean updateOrCreateExchangeAppointment(String username, ExchangeService service, CalendarEvent event, String exoMasterId, TimeZone userCalendarTimeZone,
       List<CalendarEvent> eventsToUpdateModifiedTime) throws Exception {
+    return updateOrCreateExchangeAppointment(username, service, event, exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, true);
+  }
+
+  private boolean updateOrCreateExchangeAppointment(String username, ExchangeService service, CalendarEvent event, String exoMasterId, TimeZone userCalendarTimeZone,
+      List<CalendarEvent> eventsToUpdateModifiedTime, boolean checkDates) throws Exception {
     if (event == null) {
       return false;
     }
@@ -163,7 +168,9 @@ public class ExchangeStorageService implements Serializable {
       }
     }
     if (isNew) {
-      LOG.info("Create Exchange Appointment: " + event.getSummary());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Create Exchange Appointment: " + event.getSummary());
+      }
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       appointment.save(folderId);
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
@@ -171,8 +178,21 @@ public class ExchangeStorageService implements Serializable {
             * test if appointment wasn't deleted by previous
             * 'toDeleteOccurences' List
             */if (correspondenceService.getCorrespondingId(username, event.getId()) != null) {
-      LOG.info("Update Exchange Appointment: " + event.getSummary());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Update Exchange Appointment: " + event.getSummary());
+      }
       appointment.update(ConflictResolutionMode.AlwaysOverwrite);
+      // TODO this is a workaround for a bug in EWS, when create new Allday
+      // event in Exchange then modify it in eXo, the event in Exchange will
+      // have wrong start and end dates. By saving it again, it will be fixed.
+      if (checkDates) {
+        Appointment tmpAppointment = Appointment.bind(service, appointment.getId());
+        if (!tmpAppointment.getStart().equals(appointment.getStart())) {
+          LOG.warn("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
+          updateOrCreateExchangeAppointment(username, service, event, exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, false);
+          return false;
+        }
+      }
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
     }
     if (eventsToUpdateModifiedTime != null) {
@@ -230,7 +250,9 @@ public class ExchangeStorageService implements Serializable {
     Appointment appointment = null;
     try {
       appointment = Appointment.bind(service, itemId);
-      LOG.info("Delete Exchange appointment: " + appointment.getSubject());
+      if (LOG.isTraceEnabled()) {
+        LOG.info("Delete Exchange appointment: " + appointment.getSubject());
+      }
       appointment.delete(DeleteMode.HardDelete);
     } catch (ServiceResponseException e) {
       if (LOG.isTraceEnabled()) {

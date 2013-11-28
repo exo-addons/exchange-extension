@@ -1,4 +1,5 @@
-function addExchangeButton() {
+function addExchangeButton(noContent) {
+	
 	var separatorLineElement = $( ".UICalendarPortlet .calendarWorkingWorkspace .uiActionBar .btnRight .separatorLine" );
 	if(!separatorLineElement || separatorLineElement.length == 0) {
 		return;
@@ -9,14 +10,14 @@ function addExchangeButton() {
 		
 		$('.ExchangeSettingsWindow .ExchangeSettingsContent').html("<div class='ExchangeSettingsLoading'>Loading...</div>");
     	$.getJSON("/portal/rest/exchange/calendars", function(data){
-    		$('.ExchangeSettingsWindow .ExchangeSettingsContent').html("");
         	if(!data || data.length == 0) {
     			$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange-disabled.png');
     			$('.ExchangeSettingsWindow .ExchangeSettingsContent').html('<div class="ExchangeSettingsError">User seems not connected to Exchange</div>');
     		} else {
+				$('.ExchangeSettingsWindow .ExchangeSettingsContent').html("<div class='ExchangeSyncNowButton'>Refresh</div>");
     			$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange.png');
 	    	    $.each(data, function(i,item){
-	    	    	$('.ExchangeSettingsWindow .ExchangeSettingsContent').append(""+item.name+"<input type='checkbox' "+(item.synchronizedFolder?"checked":"")+" name='"+item.name+"' value='"+item.id+"' /><BR/>");
+	    	    	$('.ExchangeSettingsWindow .ExchangeSettingsContent').append("<label><span class='uiCheckbox'><input type='checkbox' "+(item.synchronizedFolder?"checked":"")+" name='"+item.name+"' value='"+item.id+"' /><span>"+item.name+"</span></span></label>");
 	    	    });
 	        	$('.ExchangeSettingsWindow input[type="checkbox"]').click(function(){
 	        	    if($(this).is(':checked')){
@@ -25,6 +26,10 @@ function addExchangeButton() {
 	        	    	$.get("/portal/rest/exchange/unsync?"+$.param({folderId : $(this).val()}));
 	        	    }
 	        	});
+				$(".ExchangeSyncNowButton").on("click", function() {
+					$('.ExchangeSettingsButton').click();
+	        	    $.get("/portal/rest/exchange/syncNow");
+				});
     		}
     	});
     	$('.ExchangeSettingsWindow').css('top', (separatorLineElement.position().top + 25) + 'px');
@@ -50,7 +55,7 @@ function addExchangeButton() {
 	$('.ExchangeSettingsWindow').hide();
 	$('.ExchangeSettingsWindow').html("<div class='ExchangeSettingsTitle'><h6>Exchange Calendars</h6><button type='button' class='btn btn-primary ExchangeEditSettingsButton'>Edit settings</button></div><div class='ExchangeEditSettingsPanel'><div class='ExchangeEditSettingsTitle'></div><div class='ExchangeEditSettingsContent'></div><div class='ExchangeEditSettingsButtons'><button type='button' class='btn btn-primary ExchangeEditSettingsSaveButton'>Save</button><button type='button' class='btn ExchangeEditSettingsCancelButton'>Cancel</button></div></div><div class='ExchangeSettingsContent'></div>");
 	$(".ExchangeEditSettingsPanel").hide();
-	$(".ExchangeEditSettingsContent").html("<label for='serverName'>URL</label><input type='text' id='serverName' name='serverName' placeholder='http://server/EWS/Exchange.asmx'><br/>");
+	$(".ExchangeEditSettingsContent").html("<label for='serverName'>URL</label><input type='text' id='serverName' name='serverName' placeholder='https://server/EWS/Exchange.asmx'><br/>");
 	$(".ExchangeEditSettingsContent").append("<label for='domainName'>Domain</label><input type='text' id='domainName' name='domainName' placeholder='Exchange Domain Name'><br/>");
 	$(".ExchangeEditSettingsContent").append("<label for='username'>Username</label><input type='text' id='username' name='username' placeholder='Required'><br/>");
 	$(".ExchangeEditSettingsContent").append("<label for='password'>Password</label><input type='password' id='password' name='password' placeholder='Required'><br/>");
@@ -67,15 +72,13 @@ function addExchangeButton() {
 			$('.ExchangeSettingsWindow').hide();
 		}
 	});
-	
+
 	$(".ExchangeEditSettingsButton").click(function(e) {
 		$(".ExchangeEditSettingsContent #username").val("");
 		$(".ExchangeEditSettingsContent #password").val("");
 		$(".ExchangeEditSettingsContent #domainName").val("");
 		$(".ExchangeEditSettingsContent #serverName").val("");
 		
-		$(".ExchangeEditSettingsSaveButton").removeAttr("disabled");
-		$(".ExchangeEditSettingsCancelButton").removeAttr("disabled");
     	$(".ExchangeEditSettingsContent input").removeAttr("style");
     	$(".ExchangeEditSettingsContent label").removeAttr("style");
 		
@@ -144,8 +147,6 @@ function addExchangeButton() {
 		if(exchangeSettingsNOK) {
 			return;
 		}
-		$(".ExchangeEditSettingsSaveButton").attr("disabled", "true");
-		$(".ExchangeEditSettingsCancelButton").attr("disabled", "true");
 		$.ajax({
 		    type: "POST",
 		    url: "/portal/rest/exchange/settings",
@@ -162,8 +163,6 @@ function addExchangeButton() {
 				$('.ExchangeSettingsButton').click();
 			},
 		    error: function(errMsg) {
-				$(".ExchangeEditSettingsSaveButton").removeAttr("disabled");
-				$(".ExchangeEditSettingsCancelButton").removeAttr("disabled");
 		    	if(errMsg.statusText) {
 			        alert(errMsg.statusText);
 		    	} else {
@@ -172,6 +171,13 @@ function addExchangeButton() {
 		    }
 		});
 	});
+	if(noContent) {
+		$(".UICalendarPortlet").bind("DOMNodeInserted DOMSubtreeModified", function() {
+			if(!$('.ExchangeSettingsButton') || $('.ExchangeSettingsButton').length == 0) {
+				addExchangeButton();
+			}
+		});
+	}
 }
 if ( document.addEventListener ) {
 	window.addEventListener( "load", addExchangeButton, false );

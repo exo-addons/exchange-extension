@@ -76,19 +76,27 @@ public class ExoStorageService implements Serializable {
 
     if ((calendarEvent.getRepeatType() == null || calendarEvent.getRepeatType().equals(CalendarEvent.RP_NOREPEAT))
         && (calendarEvent.getIsExceptionOccurrence() == null || !calendarEvent.getIsExceptionOccurrence())) {
-      LOG.info("Delete user calendar event: " + calendarEvent.getSummary());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Delete user calendar event: " + calendarEvent.getSummary());
+      }
       storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     } else if (calendarEvent.getIsExceptionOccurrence() != null && calendarEvent.getIsExceptionOccurrence()) {
-      LOG.info("Delete user calendar event exceptional occurence: " + calendarEvent.getSummary() + ", id=" + calendarEvent.getRecurrenceId());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Delete user calendar event exceptional occurence: " + calendarEvent.getSummary() + ", id=" + calendarEvent.getRecurrenceId());
+      }
       storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     } else if (calendarEvent.getRecurrenceId() != null && !calendarEvent.getRecurrenceId().isEmpty()) {
-      LOG.info("Delete user calendar event occurence from series: " + calendarEvent.getSummary() + " with id : " + calendarEvent.getRecurrenceId());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Delete user calendar event occurence from series: " + calendarEvent.getSummary() + " with id : " + calendarEvent.getRecurrenceId());
+      }
       storage.removeOccurrenceInstance(username, calendarEvent);
     } else {
-      LOG.info("Delete user calendar event series: " + calendarEvent.getSummary());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Delete user calendar event series: " + calendarEvent.getSummary());
+      }
       storage.removeRecurrenceSeries(username, calendarEvent);
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
@@ -177,7 +185,9 @@ public class ExoStorageService implements Serializable {
       }
     }
     if (calendar == null) {
-      LOG.info("Create user calendar from Exchange: " + folder.getDisplayName());
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Create user calendar from Exchange: " + folder.getDisplayName());
+      }
 
       calendar = new Calendar();
       calendar.setId(calendarId);
@@ -395,10 +405,12 @@ public class ExoStorageService implements Serializable {
           }
         }
 
-        if (isNew) {
-          LOG.info("Create user calendar event: " + appointment.getSubject());
-        } else {
-          LOG.info("Update user calendar event: " + appointment.getSubject());
+        if (LOG.isTraceEnabled()) {
+          if (isNew) {
+            LOG.trace("Create user calendar event: " + appointment.getSubject());
+          } else {
+            LOG.trace("Update user calendar event: " + appointment.getSubject());
+          }
         }
 
         CalendarConverterService.convertExchangeToExoEvent(event, appointment, username, storage, organizationService.getUserHandler(), timeZone);
@@ -429,10 +441,12 @@ public class ExoStorageService implements Serializable {
           }
           return updatedEvents;
         } else {
-          if (isNew) {
-            LOG.info("Create recurrent user calendar event: " + appointment.getSubject());
-          } else {
-            LOG.info("Update recurrent user calendar event: " + appointment.getSubject());
+          if (LOG.isTraceEnabled()) {
+            if (isNew) {
+              LOG.trace("Create recurrent user calendar event: " + appointment.getSubject());
+            } else {
+              LOG.trace("Update recurrent user calendar event: " + appointment.getSubject());
+            }
           }
 
           masterEvent.setCalendarId(calendar.getId());

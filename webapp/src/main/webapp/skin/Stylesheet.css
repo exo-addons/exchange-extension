@@ -138,3 +138,33 @@
   float: right;
   margin: 5px;
 }
+
+.ExchangeSyncNowButton {
+  float: right;
+  color: #ffffff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+  background-color: #567ab6;
+  background-image: -moz-linear-gradient(top, #638acd, #426393);
+  background-image: -webkit-gradient(linear, 0 0, 0 100%, from(#638acd), to(#426393));
+  background-image: -webkit-linear-gradient(top, #638acd, #426393);
+  background-image: -o-linear-gradient(top, #638acd, #426393);
+  background-image: linear-gradient(to bottom, #638acd, #426393);
+  background-repeat: repeat-x;
+  font-weight: bold;
+  font-size: 10px;
+  padding: 2px;
+  border: 1px solid #224886;
+  border-radius: 13px;
+  opacity: 0.5;
+  margin-top: -4px;
+  margin-right: -4px;
+  cursor: pointer;
+}
+
+.ExchangeSyncNowButton:hover {
+  opacity: 1;
+}
+
+.ExchangeSettingsContent .uiCheckbox>span {
+  cursor: pointer;
+}

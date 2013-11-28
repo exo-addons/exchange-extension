@@ -72,6 +72,7 @@ public class IntegrationListener implements Startable {
 
   private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(10);
   private final Map<String, ScheduledFuture<?>> futures = new HashMap<String, ScheduledFuture<?>>();
+  private final Map<String, Runnable> runnables = new HashMap<String, Runnable>();
 
   private final ExoStorageService exoStorageService;
   private final ExchangeStorageService exchangeStorageService;
@@ -191,6 +192,7 @@ public class IntegrationListener implements Startable {
 
       // Add future task to the map to destroy thread when the user logout
       futures.put(username, future);
+      runnables.put(username, schedulerCommand);
 
       LOG.info("User '" + username + "' logged in, exchange synchronization task started.");
     } catch (Exception e) {
@@ -208,6 +210,19 @@ public class IntegrationListener implements Startable {
    */
   public void userLoggedOut(String username) {
     closeTaskIfExists(username);
+  }
+
+  /**
+   * 
+   * Forces the execution of synchronization
+   * 
+   * @param username
+   */
+  public void synchronizeNow(String username) {
+    Runnable command = runnables.get(username);
+    if (command != null) {
+      command.run();
+    }
   }
 
   private void closeTaskIfExists(String username) {
@@ -312,14 +327,18 @@ public class IntegrationListener implements Startable {
         Date lastSyncDate = integrationService.getUserLastCheckDate();
         // This is used once, when user login
         if (firstSynchronization) {
-          LOG.info("run first synchronization for user: " + username);
+          if (LOG.isTraceEnabled()) {
+            LOG.trace("run first synchronization for user: " + username);
+          }
           // Verify modifications made on folders
           synchronizeByModificationDate(lastSyncDate, updatedExoEventIDs);
           this.firstSynchronization = false;
           // Begin catching events from Exchange after first synchronization
           newSubscription();
         } else {
-          LOG.info("run scheduled synchronization for user: " + username);
+          if (LOG.isTraceEnabled()) {
+            LOG.trace("run scheduled synchronization for user: " + username);
+          }
           // This is used in a scheduled task when the user session still alive
           GetEventsResults events;
           try {
@@ -342,7 +361,9 @@ public class IntegrationListener implements Startable {
         long checkTime = java.util.Calendar.getInstance().getTimeInMillis();
         integrationService.setUserLastCheckDate(checkTime);
 
-        LOG.info("Synchronization completed.");
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("Synchronization completed.");
+        }
       } catch (Exception e) {
         LOG.error("Error while synchronizing calndar entries.", e);
       } finally {
@@ -353,7 +374,9 @@ public class IntegrationListener implements Startable {
     private void waitOtherTasks() {
       int i = 0;
       while (integrationService.isSynchronizationStarted() && i < 10) {
-        LOG.info("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'" + username + "'.");
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'" + username + "'.");
+        }
         try {
           Thread.sleep(5000);
         } catch (Exception e) {
@@ -446,7 +469,9 @@ public class IntegrationListener implements Startable {
     public void interrupt() {
       if (subscription != null) {
         try {
-          LOG.info("Thread interruption: unsubscribe user service:" + username);
+          if (LOG.isTraceEnabled()) {
+            LOG.trace("Thread interruption: unsubscribe user service:" + username);
+          }
           subscription.unsubscribe();
         } catch (Exception e) {
           LOG.error("Thread interruption: Error while unsubscribe to thread of user:" + username);

@@ -298,7 +298,9 @@ public class IntegrationService {
   public boolean deleteExoCalendar(FolderId folderId) throws Exception {
     Folder folder = exchangeStorageService.getExchangeCalendar(service, folderId);
     if (folder != null) {
-      LOG.info("Folder was found, but event seems saying that it was deleted.");
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Folder was found, but event seems saying that it was deleted.");
+      }
       return false;
     }
     return exoStorageService.deleteCalendar(username, folderId.getUniqueId());
@@ -314,7 +316,9 @@ public class IntegrationService {
   }
 
   public void removeInstance() {
-    LOG.info("Stop Exchange Integration Service for user: " + username);
+    if (LOG.isTraceEnabled()) {
+      LOG.trace("Stop Exchange Integration Service for user: " + username);
+    }
     instances.remove(username);
   }
 
@@ -389,7 +393,9 @@ public class IntegrationService {
       if (folder != null) {
         Calendar calendar = exoStorageService.getUserCalendar(username, folderId.getUniqueId());
         if (calendar != null) {
-          LOG.info("Folder '" + folderId.getUniqueId() + "' was deleted from Exchange, stopping synchronization for this folder.");
+          if (LOG.isTraceEnabled()) {
+            LOG.trace("Folder '" + folderId.getUniqueId() + "' was deleted from Exchange, stopping synchronization for this folder.");
+          }
           if (deleteExoCalendarOnUnsync) {
             exoStorageService.deleteCalendar(username, folderId.getUniqueId());
           } else {

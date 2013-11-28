@@ -191,9 +191,13 @@ public class CalendarConverterService {
             tmpEvent.setRepeatType(CalendarEvent.RP_NOREPEAT);
             tmpEvent.setId(masterEvent.getId());
             tmpEvent.setCalendarId(masterEvent.getCalendarId());
-            LOG.info("Create exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: " + tmpEvent.getRecurrenceId());
+            if (LOG.isTraceEnabled()) {
+              LOG.trace("Create exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: " + tmpEvent.getRecurrenceId());
+            }
           } else {
-            LOG.info("Update exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: " + tmpEvent.getRecurrenceId());
+            if (LOG.isTraceEnabled()) {
+              LOG.trace("Update exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: " + tmpEvent.getRecurrenceId());
+            }
             convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler, timeZone);
           }
           updatedEvents.add(tmpEvent);
@@ -709,7 +713,7 @@ public class CalendarConverterService {
       ListAccess<User> listAccess = userHandler.findUsersByQuery(query);
       if (listAccess == null || listAccess.getSize() == 0) {
         if (LOG.isTraceEnabled()) {
-          LOG.info("User with email '" + attendee.getAddress() + "' was not found in eXo.");
+          LOG.trace("User with email '" + attendee.getAddress() + "' was not found in eXo.");
         }
       } else if (listAccess.getSize() > 1) {
         if (LOG.isTraceEnabled()) {

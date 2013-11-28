@@ -37,7 +37,9 @@ public class CalendarDeleteAction implements Action {
 
         IntegrationService integrationService = IntegrationService.getInstance(userId);
         if (integrationService == null) {
-          LOG.info("User '" + state.getIdentity().getUserId() + "' has no Exchange service, event will not be deleted from Exchange: eventId=" + eventId);
+          if (LOG.isTraceEnabled()) {
+            LOG.info("User '" + state.getIdentity().getUserId() + "' has no Exchange service, event will not be deleted from Exchange: eventId=" + eventId);
+          }
           return false;
         } else {
           boolean started = false;

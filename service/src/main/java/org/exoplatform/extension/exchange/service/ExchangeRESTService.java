@@ -84,6 +84,17 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
 
   @GET
   @RolesAllowed("users")
+  @Path("/syncNow")
+  public Response synchronizeNow() throws Exception {
+    // It must be a user present in the session because of RolesAllowed
+    // annotation
+    String username = ConversationState.getCurrent().getIdentity().getUserId();
+    integrationListener.synchronizeNow(username);
+    return Response.ok().build();
+  }
+
+  @GET
+  @RolesAllowed("users")
   @Path("/sync")
   public Response synchronizeFolderWithExo(@QueryParam("folderId") String folderIdString) throws Exception {
     if (folderIdString == null || folderIdString.isEmpty()) {
