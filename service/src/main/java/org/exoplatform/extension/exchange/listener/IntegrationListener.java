@@ -218,7 +218,7 @@ public class IntegrationListener implements Startable {
    * 
    * @param username
    */
-  public void synchronizeNow(String username) {
+  public void synchronize(String username) {
     Runnable command = runnables.get(username);
     if (command != null) {
       command.run();

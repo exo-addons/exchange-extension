@@ -89,7 +89,7 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     // It must be a user present in the session because of RolesAllowed
     // annotation
     String username = ConversationState.getCurrent().getIdentity().getUserId();
-    integrationListener.synchronizeNow(username);
+    integrationListener.synchronize(username);
     return Response.ok().build();
   }
 
@@ -106,6 +106,7 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     String username = ConversationState.getCurrent().getIdentity().getUserId();
     IntegrationService service = IntegrationService.getInstance(username);
     service.addFolderToSynchronization(folderIdString);
+    integrationListener.synchronize(username);
     return Response.ok().build();
   }
 
@@ -122,6 +123,7 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     String username = ConversationState.getCurrent().getIdentity().getUserId();
     IntegrationService service = IntegrationService.getInstance(username);
     service.deleteFolderFromSynchronization(folderIdString);
+    integrationListener.synchronize(username);
     return Response.ok().build();
   }
 
