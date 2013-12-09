@@ -33,6 +33,9 @@
 		<dependency>
 			<groupId>com.microsoft.exchange</groupId>
 			<artifactId>exchange-ws-api</artifactId>
+			<version>${com.microsoft.ews.version}</version>
+			<scope>system</scope>
+			<systemPath>${project.build.directory}/../../packaging/src/main/assemblies/lib/EWSJavaAPI_1.2.jar</systemPath>
 		</dependency>
 	</dependencies>
 	<build>
