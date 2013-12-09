@@ -20,9 +20,9 @@
 		</developer>
 	</developers>
 	<scm>
-		<connection>scm:git:git://github.com/exo-addons/exchange-application.git</connection>
-		<developerConnection>scm:git:ssh://git@github.com/exo-addons/exchange-application.git</developerConnection>
-		<url>https://github.com/exo-addons/exchange-application</url>
+		<connection>scm:git:git://github.com/exo-addons/exchange-extension.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/exo-addons/exchange-extension.git</developerConnection>
+		<url>https://github.com/exo-addons/exchange-extension</url>
 	</scm>
 	<properties>
 		<maven.compiler.target>1.7</maven.compiler.target>
