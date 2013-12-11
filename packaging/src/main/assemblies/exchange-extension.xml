@@ -12,6 +12,7 @@
 			<outputDirectory>lib</outputDirectory>
 			<outputFileNameMapping>${artifact.artifactId}.${artifact.extension}</outputFileNameMapping>
 			<includes>
+				<include>org.exoplatform.thirdparty.microsoft.exchange:exchange-ws-api:jar</include>
 				<include>${project.groupId}:exchange-extension-*:jar</include>
 				<include>jcifs:jcifs:jar</include>
 			</includes>

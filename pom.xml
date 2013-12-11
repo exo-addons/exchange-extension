@@ -2,8 +2,8 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
-		<artifactId>addons-parent-pom</artifactId>
 		<groupId>org.exoplatform.addons</groupId>
+		<artifactId>addons-parent-pom</artifactId>
 		<version>2</version>
 	</parent>
 	<groupId>org.exoplatform.addons.exchange</groupId>
@@ -23,12 +23,13 @@
 		<connection>scm:git:git://github.com/exo-addons/exchange-extension.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/exo-addons/exchange-extension.git</developerConnection>
 		<url>https://github.com/exo-addons/exchange-extension</url>
+		<tag>exchange-extension-1.0</tag>
 	</scm>
 	<properties>
 		<maven.compiler.target>1.7</maven.compiler.target>
 		<maven.compiler.source>1.7</maven.compiler.source>
 		<org.exoplatform.platform.version>4.0.3</org.exoplatform.platform.version>
-		<com.microsoft.ews.version>1.2</com.microsoft.ews.version>
+		<com.microsoft.ews.version>1.2-PATCHED-01</com.microsoft.ews.version>
 		<jcifs.version>1.3.17</jcifs.version>
 		<lombok.version>0.11.6</lombok.version>
 		<slf4j.version>1.6.1</slf4j.version>
@@ -47,6 +48,12 @@
 				<groupId>org.projectlombok</groupId>
 				<artifactId>lombok</artifactId>
 				<version>${lombok.version}</version>
+				<scope>provided</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.exoplatform.thirdparty.microsoft.exchange</groupId>
+				<artifactId>exchange-ws-api</artifactId>
+				<version>${com.microsoft.ews.version}</version>
 				<scope>provided</scope>
 			</dependency>
 			<dependency>
