@@ -23,7 +23,6 @@
 		<connection>scm:git:git://github.com/exo-addons/exchange-extension.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/exo-addons/exchange-extension.git</developerConnection>
 		<url>https://github.com/exo-addons/exchange-extension</url>
-		<tag>exchange-extension-1.0</tag>
 	</scm>
 	<properties>
 		<maven.compiler.target>1.7</maven.compiler.target>
