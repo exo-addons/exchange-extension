@@ -3,11 +3,10 @@
 	<parent>
 		<groupId>org.exoplatform.addons.exchange</groupId>
 		<artifactId>exchange-extension-parent</artifactId>
-		<version>1.0</version>
+		<version>1.0.1-SNAPSHOT</version>
 	</parent>
 	<groupId>org.exoplatform.addons.exchange</groupId>
 	<artifactId>exchange-extension-configuration-packaging</artifactId>
-	<version>1.0</version>
 	<packaging>pom</packaging>
 	<name>eXo Platform - addons - Exchange extension - Zip Packaging</name>
 	<description>eXo Platform - addons - Exchange extension - Zip Packaging</description>
