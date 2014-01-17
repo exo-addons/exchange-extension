@@ -49,7 +49,7 @@ public class CorrespondenceService implements Serializable {
    * @return Id of the corresponding element
    * @throws Exception
    */
-  protected String getCorrespondingId(String username, String id) throws Exception {
+  public String getCorrespondingId(String username, String id) throws Exception {
     Properties properties = loadCorrespondenceProperties(username);
     if (properties != null) {
       return properties.getProperty(id);

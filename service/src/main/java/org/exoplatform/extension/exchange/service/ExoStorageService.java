@@ -495,7 +495,7 @@ public class ExoStorageService implements Serializable {
         List<String> occAppointmentIDs = new ArrayList<String>();
         // Deleted execptional occurences events.
         List<CalendarEvent> toDeleteEvents = CalendarConverterService.convertExchangeToExoOccurenceEvent(masterEvent, exceptionalEventsToUpdate, occAppointmentIDs, appointment, username, storage,
-            organizationService.getUserHandler(), timeZone);
+            organizationService.getUserHandler(), correspondenceService, timeZone);
         if (exceptionalEventsToUpdate != null && !exceptionalEventsToUpdate.isEmpty()) {
           storage.updateOccurrenceEvent(calendar.getId(), calendar.getId(), masterEvent.getCalType(), masterEvent.getCalType(), exceptionalEventsToUpdate, username);
 

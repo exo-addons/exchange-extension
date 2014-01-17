@@ -24,6 +24,7 @@ import microsoft.exchange.webservices.data.DeletedOccurrenceInfo;
 import microsoft.exchange.webservices.data.DeletedOccurrenceInfoCollection;
 import microsoft.exchange.webservices.data.FileAttachment;
 import microsoft.exchange.webservices.data.Importance;
+import microsoft.exchange.webservices.data.ItemId;
 import microsoft.exchange.webservices.data.LegacyFreeBusyStatus;
 import microsoft.exchange.webservices.data.MessageBody;
 import microsoft.exchange.webservices.data.OccurrenceInfo;
@@ -47,6 +48,7 @@ import org.exoplatform.calendar.service.Reminder;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
 import org.exoplatform.calendar.service.impl.NewUserListener;
 import org.exoplatform.commons.utils.ListAccess;
+import org.exoplatform.extension.exchange.service.CorrespondenceService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.Query;
@@ -170,7 +172,7 @@ public class CalendarConverterService {
    * @throws Exception
    */
   public static List<CalendarEvent> convertExchangeToExoOccurenceEvent(CalendarEvent masterEvent, List<CalendarEvent> updatedEvents, List<String> appointmentIds, Appointment masterAppointment,
-      String username, JCRDataStorage storage, UserHandler userHandler, TimeZone timeZone) throws Exception {
+      String username, JCRDataStorage storage, UserHandler userHandler, CorrespondenceService correspondenceService, TimeZone timeZone) throws Exception {
     masterAppointment = Appointment.bind(masterAppointment.getService(), masterAppointment.getId(), new PropertySet(AppointmentSchema.ModifiedOccurrences));
     {
       OccurrenceInfoCollection occurrenceInfoCollection = masterAppointment.getModifiedOccurrences();
@@ -218,7 +220,15 @@ public class CalendarConverterService {
           }
           continue;
         }
-        calendarEvents.add(toDeleteEvent);
+
+        String appId = correspondenceService.getCorrespondingId(username, toDeleteEvent.getId());
+        Appointment appointment = null;
+        try {
+          appointment = Appointment.bind(masterAppointment.getService(), ItemId.getItemIdFromString(appId));
+        } catch (Exception e) {}
+        if (appointment == null || toDeleteEvent.getIsExceptionOccurrence() == null || !toDeleteEvent.getIsExceptionOccurrence()) {
+          calendarEvents.add(toDeleteEvent);
+        }
       }
     }
     return calendarEvents;
