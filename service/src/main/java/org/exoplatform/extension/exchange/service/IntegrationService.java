@@ -147,7 +147,7 @@ public class IntegrationService {
     }
 
     synchronizeAppointmentsByModificationDate(folderId, lastSyncDate, updatedExoEventIDs, diffTimeZone);
-    synchronizeNewlyExoEvents(folderId, updatedExoEventIDs, exoLastSyncDate);
+    synchronizeNewExoEvents(folderId, updatedExoEventIDs, exoLastSyncDate);
     synchronizeExoEventsByModificationDate(folderId, updatedExoEventIDs, exoLastSyncDate);
   }
 
@@ -672,7 +672,7 @@ public class IntegrationService {
     }
   }
 
-  private void synchronizeNewlyExoEvents(FolderId folderId, List<String> updatedExoEventIDs, Date exoLastSyncDate) throws Exception {
+  private void synchronizeNewExoEvents(FolderId folderId, List<String> updatedExoEventIDs, Date exoLastSyncDate) throws Exception {
     // Search for existant Appointments in Exchange but not in eXo
     Iterable<CalendarEvent> unsynchronizedEvents = searchUnsynchronizedAppointments(username, folderId.getUniqueId());
     for (CalendarEvent calendarEvent : unsynchronizedEvents) {

@@ -548,10 +548,12 @@ public class CalendarConverterService {
   private static CalendarEvent getOccurenceOfDate(String username, JCRDataStorage storage, CalendarEvent masterEvent, Date originalStart, TimeZone timeZone) throws Exception {
     Date date = getExoDateFromExchangeFormat(originalStart);
     String recurenceId = RECURRENCE_ID_FORMAT.format(date);
-    List<CalendarEvent> exceptionEvens = storage.getExceptionEvents(username, masterEvent);
-    for (CalendarEvent calendarEvent : exceptionEvens) {
-      if (calendarEvent.getRecurrenceId().equals(recurenceId)) {
-        return calendarEvent;
+    List<CalendarEvent> exceptionEvents = storage.getExceptionEvents(username, masterEvent);
+    if (exceptionEvents != null && !exceptionEvents.isEmpty()) {
+      for (CalendarEvent calendarEvent : exceptionEvents) {
+        if (calendarEvent.getRecurrenceId().equals(recurenceId)) {
+          return calendarEvent;
+        }
       }
     }
 

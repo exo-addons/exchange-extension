@@ -1,6 +1,8 @@
 package org.exoplatform.extension.exchange.service;
 
 import java.io.Serializable;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -12,7 +14,10 @@ import java.util.TimeZone;
 import javax.jcr.Node;
 
 import microsoft.exchange.webservices.data.Appointment;
+import microsoft.exchange.webservices.data.AppointmentSchema;
+import microsoft.exchange.webservices.data.BasePropertySet;
 import microsoft.exchange.webservices.data.Folder;
+import microsoft.exchange.webservices.data.PropertySet;
 
 import org.exoplatform.calendar.service.Calendar;
 import org.exoplatform.calendar.service.CalendarEvent;
@@ -34,6 +39,7 @@ public class ExoStorageService implements Serializable {
   private static final long serialVersionUID = 6614108102985034995L;
 
   private final static Log LOG = ExoLogger.getLogger(ExoStorageService.class);
+  private final static DateFormat EXCLUDE_ID_FORMAT_FIRST_CHARS = new SimpleDateFormat("yyyyMMdd");
 
   private JCRDataStorage storage;
   private OrganizationService organizationService;
@@ -378,6 +384,7 @@ public class ExoStorageService implements Serializable {
     node.save();
   }
 
+  @SuppressWarnings("deprecation")
   private List<CalendarEvent> createOrUpdateEvent(Appointment appointment, String username, boolean isNew, TimeZone timeZone) throws Exception {
     Calendar calendar = getUserCalendar(username, appointment.getParentFolderId().getUniqueId());
     if (calendar == null) {
@@ -435,7 +442,31 @@ public class ExoStorageService implements Serializable {
           orginialStartDate = masterEvent.getFromDateTime();
         }
 
-        if (!isNew && CalendarConverterService.verifyModifiedDatesConflict(masterEvent, appointment)) {
+        // FIXME there is a bug in Exchange modification time of the server:
+        // Adding a recurrent Item + delete last occurence => last modified
+        // date isn't updated. So we test here if the last occurence was deleted
+        // or not
+        // Begin workaround
+        boolean isLastOccurenceDeleted = false;
+        appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.Recurrence));
+        if (appointment.getRecurrence().hasEnd()) {
+          Date recEndDate = appointment.getRecurrence().getEndDate();
+          appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.LastOccurrence));
+          isLastOccurenceDeleted = appointment.getLastOccurrence().getEnd().getDate() < recEndDate.getDate();
+
+          if (isLastOccurenceDeleted && masterEvent.getExcludeId() != null) {
+            String pattern = EXCLUDE_ID_FORMAT_FIRST_CHARS.format(recEndDate);
+            int i = 0;
+            while (isLastOccurenceDeleted && i < masterEvent.getExcludeId().length) {
+              isLastOccurenceDeleted = !masterEvent.getExcludeId()[i].startsWith(pattern);
+              i++;
+            }
+          }
+        }
+        appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(BasePropertySet.FirstClassProperties));
+        // End workaround
+
+        if (!isLastOccurenceDeleted && !isNew && CalendarConverterService.verifyModifiedDatesConflict(masterEvent, appointment)) {
           if (LOG.isTraceEnabled()) {
             LOG.trace("Attempting to update eXo Event with Exchange Event, but modification date of eXo is after, ignore updating.");
           }
@@ -492,5 +523,4 @@ public class ExoStorageService implements Serializable {
     }
     return updatedEvents;
   }
-
 }
