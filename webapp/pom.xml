@@ -4,7 +4,7 @@
   <parent>
 	<groupId>org.exoplatform.addons.exchange</groupId>
 	<artifactId>exchange-extension-parent</artifactId>
-	<version>1.0.1-SNAPSHOT</version>
+	<version>1.0.2-SNAPSHOT</version>
   </parent>
   <artifactId>exchange-resources</artifactId>
   <packaging>war</packaging>
