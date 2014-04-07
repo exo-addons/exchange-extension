@@ -23,8 +23,8 @@
 		<connection>scm:git:git://github.com/exo-addons/exchange-extension.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/exo-addons/exchange-extension.git</developerConnection>
 		<url>https://github.com/exo-addons/exchange-extension</url>
-	  <tag>1.0</tag>
-  </scm>
+		<tag>1.0</tag>
+	</scm>
 	<properties>
 		<maven.compiler.target>1.7</maven.compiler.target>
 		<maven.compiler.source>1.7</maven.compiler.source>
@@ -69,36 +69,32 @@
 		<module>webapp</module>
 		<module>packaging</module>
 	</modules>
-	<repositories>
-		<repository>
-			<id>eXo</id>
-			<name>eXo Public Maven Repository Group</name>
-			<url>http://repository.exoplatform.org/content/groups/public/</url>
-			<layout>default</layout>
-			<releases>
-				<enabled>true</enabled>
-				<updatePolicy>never</updatePolicy>
-			</releases>
-			<snapshots>
-				<enabled>true</enabled>
-				<updatePolicy>never</updatePolicy>
-			</snapshots>
-		</repository>
-	</repositories>
-	<pluginRepositories>
-		<pluginRepository>
-			<id>eXo</id>
-			<name>eXo Public Maven Repository Group</name>
-			<url>http://repository.exoplatform.org/content/groups/public/</url>
-			<layout>default</layout>
-			<releases>
-				<enabled>true</enabled>
-				<updatePolicy>never</updatePolicy>
-			</releases>
-			<snapshots>
-				<enabled>true</enabled>
-				<updatePolicy>never</updatePolicy>
-			</snapshots>
-		</pluginRepository>
-	</pluginRepositories>
+	<profiles>
+		<profile>
+			<id>project-repositories</id>
+			<activation>
+				<property>
+					<name>!skip-project-repositories</name>
+				</property>
+			</activation>
+			<repositories>
+				<repository>
+					<snapshots>
+						<enabled>true</enabled>
+					</snapshots>
+					<id>repository.exoplatform.org</id>
+					<url>https://repository.exoplatform.org/public</url>
+				</repository>
+			</repositories>
+			<pluginRepositories>
+				<pluginRepository>
+					<snapshots>
+						<enabled>true</enabled>
+					</snapshots>
+					<id>repository.exoplatform.org</id>
+					<url>https://repository.exoplatform.org/public</url>
+				</pluginRepository>
+			</pluginRepositories>
+		</profile>
+	</profiles>
 </project>
