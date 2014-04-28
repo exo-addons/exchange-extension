@@ -175,8 +175,9 @@ public class IntegrationListener implements Startable {
    * @param exchangeDomain
    * @param exchangeServerURL
    */
-  public void userLoggedIn(final String username, final String exchangeUsername, final String password, String exchangeDomain, String exchangeServerURL) {
+  public void userLoggedIn(final String username, String exchangeUsername, final String password, String exchangeDomain, String exchangeServerURL) {
     try {
+      exchangeUsername = exchangeUsername.trim();
       Identity identity = identityRegistry.getIdentity(username);
       if (identity == null || identity.getUserId().equals(IdentityConstants.ANONIM)) {
         throw new IllegalStateException("Identity of user '" + username + "' not found.");
@@ -281,9 +282,26 @@ public class IntegrationListener implements Startable {
       this.firstSynchronization = true;
 
       ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP1, TimeZone.getDefault());
-      ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
+      ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword);
       service.setCredentials(credentials);
       service.setUrl(new URI(exchangeServerURL));
+
+      try {
+        service.getInboxRules();
+      } catch (Exception e) {
+        if ((exchangeDomain == null || exchangeDomain.isEmpty()) && exchangeUsername.contains("@")) {
+          String[] parts = exchangeUsername.split("@");
+          exchangeUsername = parts[0];
+          exchangeDomain = parts[1];
+          credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
+          service.setCredentials(credentials);
+          service.setUrl(new URI(exchangeServerURL));
+
+          service.getInboxRules();
+        } else {
+          throw e;
+        }
+      }
 
       integrationService = new IntegrationService(organizationService, calendarService, exoStorageService, exchangeStorageService, correspondenceService, service, username);
 

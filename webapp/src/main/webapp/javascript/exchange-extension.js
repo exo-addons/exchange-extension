@@ -13,7 +13,7 @@ require(["SHARED/jquery"], function( $ ) {
 			$.getJSON("/portal/rest/exchange/calendars", function(data){
 				if(!data || data.length == 0) {
 					$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange-disabled.png');
-					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html('<div class="ExchangeSettingsError">User seems not connected to Exchange</div>');
+					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html('<div class="ExchangeSettingsError">Failed to connect</div>');
 				} else {
 					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html("<div class='ExchangeSyncNowButton'>Refresh</div>");
 					$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange.png');
@@ -57,9 +57,8 @@ require(["SHARED/jquery"], function( $ ) {
 		$('.ExchangeSettingsWindow').html("<div class='ExchangeSettingsTitle'><h6>Exchange Calendars</h6><button type='button' class='btn btn-primary ExchangeEditSettingsButton'>Edit settings</button></div><div class='ExchangeEditSettingsPanel'><div class='ExchangeEditSettingsTitle'></div><div class='ExchangeEditSettingsContent'></div><div class='ExchangeEditSettingsButtons'><button type='button' class='btn btn-primary ExchangeEditSettingsSaveButton'>Save</button><button type='button' class='btn ExchangeEditSettingsCancelButton'>Cancel</button></div></div><div class='ExchangeSettingsContent'></div>");
 		$(".ExchangeEditSettingsPanel").hide();
 		$(".ExchangeEditSettingsContent").html("<label for='serverName'>URL</label><input type='text' id='serverName' name='serverName' placeholder='https://server/EWS/Exchange.asmx'><br/>");
-		$(".ExchangeEditSettingsContent").append("<label for='domainName'>Domain</label><input type='text' id='domainName' name='domainName' placeholder='Exchange Domain Name'><br/>");
-		$(".ExchangeEditSettingsContent").append("<label for='username'>Username</label><input type='text' id='username' name='username' placeholder='Required'><br/>");
-		$(".ExchangeEditSettingsContent").append("<label for='password'>Password</label><input type='password' id='password' name='password' placeholder='Required'><br/>");
+		$(".ExchangeEditSettingsContent").append("<label for='username'>Username</label><input type='text' id='username' name='username' placeholder='username@domain'><br/>");
+		$(".ExchangeEditSettingsContent").append("<label for='password'>Password</label><input type='password' id='password' name='password' placeholder='******'><br/>");
 
 		if(!$('.ExchangeSettingsMask') || $('.ExchangeSettingsMask').length == 0) {
 			$("body").append("<div class='ExchangeSettingsMask' />");
@@ -77,7 +76,6 @@ require(["SHARED/jquery"], function( $ ) {
 		$(".ExchangeEditSettingsButton").click(function(e) {
 			$(".ExchangeEditSettingsContent #username").val("");
 			$(".ExchangeEditSettingsContent #password").val("");
-			$(".ExchangeEditSettingsContent #domainName").val("");
 			$(".ExchangeEditSettingsContent #serverName").val("");
 			
 			$(".ExchangeEditSettingsContent input").removeAttr("style");
@@ -91,11 +89,6 @@ require(["SHARED/jquery"], function( $ ) {
 				if(data.serverName) {
 					$(".ExchangeEditSettingsContent #serverName").val(data.serverName);
 				} else {
-				}
-				if(data.domainName) {
-					$(".ExchangeEditSettingsContent #domainName").val(data.domainName);
-				} else {
-					$(".ExchangeEditSettingsContent #domainName").val("");
 				}
 				if(data.username) {
 					$(".ExchangeEditSettingsContent #username").val(data.username);
@@ -121,14 +114,6 @@ require(["SHARED/jquery"], function( $ ) {
 				$(".ExchangeEditSettingsContent #serverName").removeAttr("style");
 				$(".ExchangeEditSettingsContent label[for='serverName']").removeAttr("style");
 			}
-			if(!$(".ExchangeEditSettingsContent #domainName").val()) {
-				$(".ExchangeEditSettingsContent #domainName").css("border-color", "red");
-				$(".ExchangeEditSettingsContent label[for='domainName']").css("color", "red");
-				exchangeSettingsNOK = true
-			} else {
-				$(".ExchangeEditSettingsContent #domainName").removeAttr("style");
-				$(".ExchangeEditSettingsContent label[for='domainName']").removeAttr("style");
-			}
 			if(!$(".ExchangeEditSettingsContent #username").val()) {
 				$(".ExchangeEditSettingsContent #username").css("border-color", "red");
 				$(".ExchangeEditSettingsContent label[for='username']").css("color", "red");
@@ -148,27 +133,24 @@ require(["SHARED/jquery"], function( $ ) {
 			if(exchangeSettingsNOK) {
 				return;
 			}
+			$('.ExchangeSettingsWindow .ExchangeSettingsContent').html("<div class='ExchangeSettingsLoading'>Loading...</div>");
+			$(".ExchangeEditSettingsPanel").hide();
+			$(".ExchangeSettingsContent").show();
 			$.ajax({
 				type: "POST",
 				url: "/portal/rest/exchange/settings",
 				data: JSON.stringify({
 						"serverName": $('.ExchangeEditSettingsContent #serverName').val(),
-						"domainName": $('.ExchangeEditSettingsContent #domainName').val(),
 						"username": $('.ExchangeEditSettingsContent #username').val(),
 						"password": $('.ExchangeEditSettingsContent #password').val()
 					  }),
 				contentType: "application/json; charset=utf-8",
 				dataType: "json",
 				success: function(data){
-					$(".ExchangeSettingsWindow").hide();
 					$('.ExchangeSettingsButton').click();
 				},
 				error: function(errMsg) {
-					if(errMsg.statusText) {
-						alert(errMsg.statusText);
-					} else {
-						alert(errMsg);
-					}
+					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html('<div class="ExchangeSettingsError">Error getting settings from eXo Server.</div>');
 				}
 			});
 		});
