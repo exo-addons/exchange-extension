@@ -384,7 +384,6 @@ public class ExoStorageService implements Serializable {
     node.save();
   }
 
-  @SuppressWarnings("deprecation")
   private List<CalendarEvent> createOrUpdateEvent(Appointment appointment, String username, boolean isNew, TimeZone timeZone) throws Exception {
     Calendar calendar = getUserCalendar(username, appointment.getParentFolderId().getUniqueId());
     if (calendar == null) {
@@ -446,20 +445,31 @@ public class ExoStorageService implements Serializable {
         // Adding a recurrent Item + delete last occurence => last modified
         // date isn't updated. So we test here if the last occurence was deleted
         // or not
+        //
         // Begin workaround
         boolean isLastOccurenceDeleted = false;
         appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.Recurrence));
         if (appointment.getRecurrence().hasEnd()) {
           Date recEndDate = appointment.getRecurrence().getEndDate();
-          appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.LastOccurrence));
-          isLastOccurenceDeleted = appointment.getLastOccurrence().getEnd().getDate() < recEndDate.getDate();
 
-          if (isLastOccurenceDeleted && masterEvent.getExcludeId() != null) {
-            String pattern = EXCLUDE_ID_FORMAT_FIRST_CHARS.format(recEndDate);
-            int i = 0;
-            while (isLastOccurenceDeleted && i < masterEvent.getExcludeId().length) {
-              isLastOccurenceDeleted = !masterEvent.getExcludeId()[i].startsWith(pattern);
-              i++;
+          appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(BasePropertySet.FirstClassProperties));
+          if (recEndDate == null) {
+            LOG.warn("Inconsistent data delivered by MS Exchange. The recurrent Event has end but end date is null: '" + appointment.getSubject() + "', start:" + appointment.getStart() + ", end : " + appointment.getEnd());
+          } else {
+            Appointment tmpAppointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.LastOccurrence));
+            if (tmpAppointment.getLastOccurrence() == null) {
+              LOG.warn("Can't find last occurence of recurrent Event : '" + appointment.getSubject() + "', start:" + appointment.getStart() + ", end : " + appointment.getEnd());
+            } else {
+              isLastOccurenceDeleted = tmpAppointment.getLastOccurrence().getEnd().getTime() < recEndDate.getTime();
+
+              if (isLastOccurenceDeleted && masterEvent.getExcludeId() != null) {
+                String pattern = EXCLUDE_ID_FORMAT_FIRST_CHARS.format(recEndDate);
+                int i = 0;
+                while (isLastOccurenceDeleted && i < masterEvent.getExcludeId().length) {
+                  isLastOccurenceDeleted = !masterEvent.getExcludeId()[i].startsWith(pattern);
+                  i++;
+                }
+              }
             }
           }
         }
