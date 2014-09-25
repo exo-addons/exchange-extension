@@ -114,14 +114,14 @@ public class IntegrationListener implements Startable {
       LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME + "is not correctly set. Use default: 30.");
       schedulerDelayInSeconds = 30;
     }
-    if (params.containsKey(EXCHANGE_SYNCHRONIZE_ALL)) {
-      String deleteExoCalendarOnUnsyncString = params.getValueParam(EXCHANGE_SYNCHRONIZE_ALL).getValue();
+    if (params.containsKey(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC)) {
+      String deleteExoCalendarOnUnsyncString = params.getValueParam(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC).getValue();
       if (deleteExoCalendarOnUnsyncString != null && deleteExoCalendarOnUnsyncString.equals("true")) {
         deleteExoCalendarOnUnsync = true;
       }
     }
-    if (params.containsKey(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC)) {
-      String exchangeSynchronizeAllString = params.getValueParam(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC).getValue();
+    if (params.containsKey(EXCHANGE_SYNCHRONIZE_ALL)) {
+      String exchangeSynchronizeAllString = params.getValueParam(EXCHANGE_SYNCHRONIZE_ALL).getValue();
       if (exchangeSynchronizeAllString != null && exchangeSynchronizeAllString.equals("true")) {
         synchronizeAllExchangeFolders = true;
       }
