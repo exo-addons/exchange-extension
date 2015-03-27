@@ -197,7 +197,7 @@ public class IntegrationListener implements Startable {
 
       LOG.info("User '" + username + "' logged in, exchange synchronization task started.");
     } catch (Exception e) {
-      LOG.warn("Exchange integration error for user '" + username + "' : " + e.getMessage());
+      LOG.warn("Exchange integration error for user '" + username + "' : ", e);
       if (LOG.isTraceEnabled() || LOG.isDebugEnabled()) {
         LOG.trace("Error while initializing user integration with exchange: ", e);
       }

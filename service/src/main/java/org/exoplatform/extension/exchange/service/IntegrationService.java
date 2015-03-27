@@ -1,5 +1,12 @@
 package org.exoplatform.extension.exchange.service;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.security.KeyStore;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
@@ -7,8 +14,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.TimeZone;
 
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import javax.jcr.Node;
 
 import microsoft.exchange.webservices.data.Appointment;
@@ -33,6 +43,7 @@ import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.CalendarSetting;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
+import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.ComponentRequestLifecycle;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
@@ -40,13 +51,18 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.OrganizationService;
 import org.exoplatform.services.organization.UserProfile;
+import org.exoplatform.web.security.codec.AbstractCodec;
+import org.exoplatform.web.security.codec.AbstractCodecBuilder;
+import org.exoplatform.web.security.security.TokenServiceInitializationException;
+import org.gatein.common.io.IOTools;
+import org.picocontainer.Startable;
 
 /**
  * 
  * @author Boubaker KHANFIR
  * 
  */
-public class IntegrationService {
+public class IntegrationService implements Startable {
 
   public static final String USER_EXCHANGE_SERVER_URL_ATTRIBUTE = "exchange.server.url";
   public static final String USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE = "exchange.server.domain";
@@ -68,6 +84,7 @@ public class IntegrationService {
   private final CalendarService calendarService;
 
   private boolean synchIsCurrentlyRunning = false;
+  private AbstractCodec codec;
 
   public IntegrationService(OrganizationService organizationService, CalendarService calendarService, ExoStorageService exoStorageService, ExchangeStorageService exchangeStorageService,
       CorrespondenceService correspondenceService, ExchangeService service, String username) {
@@ -574,6 +591,9 @@ public class IntegrationService {
    * @throws Exception
    */
   public void setUserArrtibute(String name, String value) throws Exception {
+    if (USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
+      value = encodePassword(value);
+    }
     setUserArrtibute(organizationService, username, name, value);
   }
 
@@ -584,7 +604,11 @@ public class IntegrationService {
    * @throws Exception
    */
   public String getUserArrtibute(String name) throws Exception {
-    return getUserArrtibute(organizationService, username, name);
+    String value = getUserArrtibute(organizationService, username, name);
+    if (value != null && USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
+      value = decodePassword(value);
+    }
+    return value;
   }
 
   /**
@@ -628,6 +652,18 @@ public class IntegrationService {
       }
     }
   }
+
+  @Override
+  public void start() {
+    try {
+      initCodec();
+    } catch (Exception e) {
+      this.codec = null;
+    }
+  }
+
+  @Override
+  public void stop() {}
 
   public ExchangeService getService() {
     return service;
@@ -796,6 +832,100 @@ public class IntegrationService {
       LOG.trace("Exchange user calendar '" + username + "', items found: " + findResults.getTotalCount());
     }
     return findResults.getItems();
+  }
+
+  private void initCodec() throws Exception {
+    String builderType = PropertyManager.getProperty("gatein.codec.builderclass");
+    Map<String, String> config = new HashMap<String, String>();
+
+    if (builderType != null) {
+      // If there is config for codec in configuration.properties, we read the
+      // config parameters from config file
+      // referenced in configuration.properties
+      String configFile = PropertyManager.getProperty("gatein.codec.config");
+      InputStream in = null;
+      try {
+        File f = new File(configFile);
+        in = new FileInputStream(f);
+        Properties properties = new Properties();
+        properties.load(in);
+        for (Map.Entry<?, ?> entry : properties.entrySet()) {
+          config.put((String) entry.getKey(), (String) entry.getValue());
+        }
+        config.put("gatein.codec.config.basedir", f.getParentFile().getAbsolutePath());
+      } catch (IOException e) {
+        throw new TokenServiceInitializationException("Failed to read the config parameters from file '" + configFile + "'.", e);
+      } finally {
+        IOTools.safeClose(in);
+      }
+    } else {
+      // If there is no config for codec in configuration.properties, we
+      // generate key if it does not exist and setup the
+      // default config
+      builderType = "org.exoplatform.web.security.codec.JCASymmetricCodecBuilder";
+      String gtnConfDir = PropertyManager.getProperty("gatein.conf.dir");
+      if (gtnConfDir == null || gtnConfDir.length() == 0) {
+        throw new TokenServiceInitializationException("'gatein.conf.dir' property must be set.");
+      }
+      File f = new File(gtnConfDir + "/codec/codeckey.txt");
+      if (!f.exists()) {
+        File codecDir = f.getParentFile();
+        if (!codecDir.exists()) {
+          codecDir.mkdir();
+        }
+        OutputStream out = null;
+        try {
+          KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+          keyGen.init(128);
+          SecretKey key = keyGen.generateKey();
+          KeyStore store = KeyStore.getInstance("JCEKS");
+          store.load(null, "gtnStorePass".toCharArray());
+          store.setEntry("gtnKey", new KeyStore.SecretKeyEntry(key), new KeyStore.PasswordProtection("gtnKeyPass".toCharArray()));
+          out = new FileOutputStream(f);
+          store.store(out, "gtnStorePass".toCharArray());
+        } catch (Exception e) {
+          throw new TokenServiceInitializationException(e);
+        } finally {
+          IOTools.safeClose(out);
+        }
+      }
+      config.put("gatein.codec.jca.symmetric.keyalg", "AES");
+      config.put("gatein.codec.jca.symmetric.keystore", "codeckey.txt");
+      config.put("gatein.codec.jca.symmetric.storetype", "JCEKS");
+      config.put("gatein.codec.jca.symmetric.alias", "gtnKey");
+      config.put("gatein.codec.jca.symmetric.keypass", "gtnKeyPass");
+      config.put("gatein.codec.jca.symmetric.storepass", "gtnStorePass");
+      config.put("gatein.codec.config.basedir", f.getParentFile().getAbsolutePath());
+    }
+
+    try {
+      this.codec = Class.forName(builderType).asSubclass(AbstractCodecBuilder.class).newInstance().build(config);
+      LOG.info("Initialized CookieTokenService.codec using builder " + builderType);
+    } catch (Exception e) {
+      throw new TokenServiceInitializationException("Could not initialize CookieTokenService.codec.", e);
+    }
+  }
+
+  private String decodePassword(String password) {
+    if (codec != null) {
+      try {
+        password = codec.decode(password);
+      } catch (Exception e) {
+        LOG.warn("Error while decoding password, it will be used in plain text", e);
+      }
+    }
+    return password;
+  }
+
+  private String encodePassword(String password) {
+    if (codec != null) {
+      try {
+        password = codec.encode(password);
+      } catch (Exception e) {
+        LOG.warn("Error while encoding password, it will be used in plain text", e);
+      }
+    }
+    return password;
   }
 
 }

@@ -5,6 +5,7 @@ import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.login.LoginException;
 
+import org.apache.commons.lang.StringUtils;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.jaas.AbstractLoginModule;
@@ -34,18 +35,11 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
       callbackHandler.handle(callbacks);
       username = ((NameCallback) callbacks[0]).getName();
       String password = new String(((PasswordCallback) callbacks[1]).getPassword());
-      if (username == null || username.isEmpty()) {
-        // Let other login modules handle this
-        return true;
+      if (!StringUtils.isEmpty(username) && !StringUtils.isEmpty(password)) {
+        getExchangeListenerService().userLoggedIn(username, password);
       }
-      if (password == null || password.isEmpty()) {
-        // Let other login modules handle this
-        return true;
-      }
-      getExchangeListenerService().userLoggedIn(username, password);
     } catch (Exception e) {
-      e.printStackTrace();
-      getLogger().error(e);
+      getLogger().warn(e);
     }
     // Let other login modules run
     return true;
