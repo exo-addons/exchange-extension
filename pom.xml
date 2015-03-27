@@ -29,7 +29,7 @@
 		<maven.compiler.target>1.7</maven.compiler.target>
 		<maven.compiler.source>1.7</maven.compiler.source>
 		<org.exoplatform.platform.version>4.0.3</org.exoplatform.platform.version>
-		<com.microsoft.ews.version>1.2-PATCHED-01</com.microsoft.ews.version>
+		<com.microsoft.ews.version>1.2-PATCHED-02</com.microsoft.ews.version>
 		<jcifs.version>1.3.17</jcifs.version>
 		<lombok.version>0.11.6</lombok.version>
 		<slf4j.version>1.6.1</slf4j.version>
