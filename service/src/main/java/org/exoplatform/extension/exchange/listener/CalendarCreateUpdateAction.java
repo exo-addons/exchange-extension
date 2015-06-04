@@ -24,9 +24,14 @@ import com.ibm.icu.util.Calendar;
  */
 public class CalendarCreateUpdateAction implements Action {
 
+  public final static ThreadLocal<Boolean> IGNORE_UPDATE = new ThreadLocal<Boolean>();
+
   private final static Log LOG = ExoLogger.getLogger(CalendarCreateUpdateAction.class);
 
   public boolean execute(Context context) throws Exception {
+    if (IGNORE_UPDATE.get() != null && IGNORE_UPDATE.get()) {
+      return false;
+    }
     Object object = context.get("currentItem");
     Node node = null;
     if (object instanceof Node) {

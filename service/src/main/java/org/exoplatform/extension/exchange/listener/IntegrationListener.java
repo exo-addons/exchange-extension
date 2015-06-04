@@ -68,7 +68,7 @@ public class IntegrationListener implements Startable {
   public static short diffTimeZone = 0;
 
   private static long threadIndex = 0;
-  private static int schedulerDelayInSeconds = 0;
+  private static int schedulerDelayInSeconds = 60;
 
   private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(10);
   private final Map<String, ScheduledFuture<?>> futures = new HashMap<String, ScheduledFuture<?>>();
@@ -99,20 +99,23 @@ public class IntegrationListener implements Startable {
     if (params.containsKey(EXCHANGE_SERVER_URL_PARAM_NAME) && !params.getValueParam(EXCHANGE_SERVER_URL_PARAM_NAME).getValue().isEmpty()) {
       exchangeServerURL = params.getValueParam(EXCHANGE_SERVER_URL_PARAM_NAME).getValue();
     } else {
-      LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_SERVER_URL_PARAM_NAME + "is not set.");
+      LOG.warn("Echange Synchronization Service: Default MS Exchange server URL (init-param " + EXCHANGE_SERVER_URL_PARAM_NAME + ") is not set.");
     }
     if (params.containsKey(EXCHANGE_DOMAIN_PARAM_NAME) && !params.getValueParam(EXCHANGE_DOMAIN_PARAM_NAME).getValue().isEmpty()) {
       exchangeDomain = params.getValueParam(EXCHANGE_DOMAIN_PARAM_NAME).getValue();
     } else {
-      LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_DOMAIN_PARAM_NAME + "is not set.");
+      LOG.warn("Echange Synchronization Service: Default MS Exchange domain name (init-param " + EXCHANGE_DOMAIN_PARAM_NAME + ") is not set.");
     }
     if (params.containsKey(EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME)) {
       String schedulerDelayInSecondsString = params.getValueParam(EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME).getValue();
       schedulerDelayInSeconds = Integer.valueOf(schedulerDelayInSecondsString);
+    } else {
+      LOG.warn("Echange Synchronization Service: Check Period in seconds (init-param " + EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME + ") is not set. Default will be used: 60 seconds.");
+      schedulerDelayInSeconds = 60;
     }
-    if (schedulerDelayInSeconds < 10) {
-      LOG.warn("Echange Synchronization Service: init-param " + EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME + "is not correctly set. Use default: 30.");
-      schedulerDelayInSeconds = 30;
+    if (schedulerDelayInSeconds < 30) {
+      LOG.warn("Echange Synchronization Service: Check Period in seconds (init-param " + EXCHANGE_LISTENER_SCHEDULER_DELAY_NAME + ") is set under 30 seconds. Default will be used: 60 seconds.");
+      schedulerDelayInSeconds = 60;
     }
     if (params.containsKey(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC)) {
       String deleteExoCalendarOnUnsyncString = params.getValueParam(EXCHANGE_DELETE_CALENDAR_ON_UNSYNC).getValue();

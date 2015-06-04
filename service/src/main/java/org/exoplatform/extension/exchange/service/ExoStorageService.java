@@ -24,6 +24,7 @@ import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
+import org.exoplatform.extension.exchange.listener.CalendarCreateUpdateAction;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.log.ExoLogger;
@@ -421,7 +422,12 @@ public class ExoStorageService implements Serializable {
 
         CalendarConverterService.convertExchangeToExoEvent(event, appointment, username, storage, organizationService.getUserHandler(), timeZone);
         event.setRepeatType(CalendarEvent.RP_NOREPEAT);
-        storage.saveUserEvent(username, calendar.getId(), event, isNew);
+        CalendarCreateUpdateAction.IGNORE_UPDATE.set(true);
+        try {
+          storage.saveUserEvent(username, calendar.getId(), event, isNew);
+        } finally {
+          CalendarCreateUpdateAction.IGNORE_UPDATE.set(false);
+        }
         correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
       }
         break;
@@ -454,7 +460,8 @@ public class ExoStorageService implements Serializable {
 
           appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(BasePropertySet.FirstClassProperties));
           if (recEndDate == null) {
-            LOG.warn("Inconsistent data delivered by MS Exchange. The recurrent Event has end but end date is null: '" + appointment.getSubject() + "', start:" + appointment.getStart() + ", end : " + appointment.getEnd());
+            LOG.warn("Inconsistent data delivered by MS Exchange. The recurrent Event has end but end date is null: '" + appointment.getSubject() + "', start:" + appointment.getStart() + ", end : "
+                + appointment.getEnd());
           } else {
             Appointment tmpAppointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.LastOccurrence));
             if (tmpAppointment.getLastOccurrence() == null) {
@@ -499,7 +506,13 @@ public class ExoStorageService implements Serializable {
               masterEvent.setExcludeId(new String[0]);
             }
           }
-          storage.saveUserEvent(username, calendar.getId(), masterEvent, isNew);
+
+          CalendarCreateUpdateAction.IGNORE_UPDATE.set(true);
+          try {
+            storage.saveUserEvent(username, calendar.getId(), masterEvent, isNew);
+          } finally {
+            CalendarCreateUpdateAction.IGNORE_UPDATE.set(false);
+          }
         }
         List<CalendarEvent> exceptionalEventsToUpdate = new ArrayList<CalendarEvent>();
         List<String> occAppointmentIDs = new ArrayList<String>();

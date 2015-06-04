@@ -4,15 +4,18 @@ import java.io.ByteArrayInputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 import microsoft.exchange.webservices.data.Appointment;
 import microsoft.exchange.webservices.data.AppointmentSchema;
+import microsoft.exchange.webservices.data.AppointmentType;
 import microsoft.exchange.webservices.data.Attachment;
 import microsoft.exchange.webservices.data.AttachmentCollection;
 import microsoft.exchange.webservices.data.Attendee;
@@ -20,6 +23,7 @@ import microsoft.exchange.webservices.data.AttendeeCollection;
 import microsoft.exchange.webservices.data.BasePropertySet;
 import microsoft.exchange.webservices.data.BodyType;
 import microsoft.exchange.webservices.data.DayOfTheWeek;
+import microsoft.exchange.webservices.data.DayOfTheWeekCollection;
 import microsoft.exchange.webservices.data.DeletedOccurrenceInfo;
 import microsoft.exchange.webservices.data.DeletedOccurrenceInfoCollection;
 import microsoft.exchange.webservices.data.FileAttachment;
@@ -27,6 +31,7 @@ import microsoft.exchange.webservices.data.Importance;
 import microsoft.exchange.webservices.data.ItemId;
 import microsoft.exchange.webservices.data.LegacyFreeBusyStatus;
 import microsoft.exchange.webservices.data.MessageBody;
+import microsoft.exchange.webservices.data.Month;
 import microsoft.exchange.webservices.data.OccurrenceInfo;
 import microsoft.exchange.webservices.data.OccurrenceInfoCollection;
 import microsoft.exchange.webservices.data.PropertySet;
@@ -42,6 +47,7 @@ import microsoft.exchange.webservices.data.StringList;
 import microsoft.exchange.webservices.data.TimeZoneDefinition;
 
 import org.apache.commons.io.output.ByteArrayOutputStream;
+import org.apache.commons.lang.StringUtils;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.EventCategory;
 import org.exoplatform.calendar.service.Reminder;
@@ -135,11 +141,68 @@ public class CalendarConverterService {
     if (recurrence instanceof DailyPattern) {
       event.setRepeatType(CalendarEvent.RP_DAILY);
     } else if (recurrence instanceof WeeklyPattern) {
-      event.setRepeatType(CalendarEvent.RP_WEEKEND);
+      event.setRepeatType(CalendarEvent.RP_WEEKLY);
+      DayOfTheWeekCollection dayOfTheWeekCollection = ((WeeklyPattern) recurrence).getDaysOfTheWeek();
+      if (dayOfTheWeekCollection != null && dayOfTheWeekCollection.getCount() > 0) {
+        String[] days = new String[7];
+        Iterator<DayOfTheWeek> iterator = dayOfTheWeekCollection.iterator();
+        ITERATE_WHILE: while (iterator.hasNext()) {
+          DayOfTheWeek dayOfTheWeek = (DayOfTheWeek) iterator.next();
+          switch (dayOfTheWeek) {
+          case Monday:
+            days[0] = CalendarEvent.RP_WEEKLY_BYDAY[0];
+            break;
+          case Tuesday:
+            days[1] = CalendarEvent.RP_WEEKLY_BYDAY[1];
+            break;
+          case Wednesday:
+            days[2] = CalendarEvent.RP_WEEKLY_BYDAY[2];
+            break;
+          case Thursday:
+            days[3] = CalendarEvent.RP_WEEKLY_BYDAY[3];
+            break;
+          case Friday:
+            days[4] = CalendarEvent.RP_WEEKLY_BYDAY[4];
+            break;
+          case Saturday:
+            days[5] = CalendarEvent.RP_WEEKLY_BYDAY[5];
+            break;
+          case Sunday:
+            days[6] = CalendarEvent.RP_WEEKLY_BYDAY[6];
+            break;
+          case Weekday:
+            days = Arrays.copyOfRange(CalendarEvent.RP_WEEKLY_BYDAY, 0, 4);
+            event.setRepeatType(CalendarEvent.RP_WORKINGDAYS);
+            break ITERATE_WHILE;
+          case WeekendDay:
+            days = Arrays.copyOfRange(CalendarEvent.RP_WEEKLY_BYDAY, 5, 6);
+            event.setRepeatType(CalendarEvent.RP_WEEKEND);
+            break ITERATE_WHILE;
+          case Day:
+            days = Arrays.copyOfRange(CalendarEvent.RP_WEEKLY_BYDAY, 0, 6);
+            break ITERATE_WHILE;
+          }
+        }
+        List<String> daysList = new ArrayList<String>();
+        for (String day : days) {
+          if (day != null) {
+            daysList.add(day);
+          }
+        }
+        event.setRepeatByDay(daysList.toArray(new String[0]));
+      }
     } else if (recurrence instanceof MonthlyPattern) {
       event.setRepeatType(CalendarEvent.RP_MONTHLY);
+      event.setRepeatByMonthDay(new long[] { ((MonthlyPattern) recurrence).getDayOfMonth() });
     } else if (recurrence instanceof YearlyPattern) {
       event.setRepeatType(CalendarEvent.RP_YEARLY);
+
+      Calendar tempCalendar = Calendar.getInstance();
+      tempCalendar.set(Calendar.MONTH, ((YearlyPattern) recurrence).getMonth().ordinal());
+      tempCalendar.set(Calendar.DAY_OF_MONTH, ((YearlyPattern) recurrence).getDayOfMonth());
+      int dayOfYear = tempCalendar.get(Calendar.DAY_OF_YEAR);
+
+      event.setRepeatByYearDay(new long[] { dayOfYear });
     }
     if (recurrence instanceof IntervalPattern) {
       if (((IntervalPattern) recurrence).getInterval() > 0) {
@@ -147,7 +210,7 @@ public class CalendarConverterService {
       }
     }
     if (recurrence.getEndDate() != null) {
-      event.setRepeatUntilDate(getExoDateFromExchangeFormat(recurrence.getEndDate()));
+      event.setRepeatUntilDate(recurrence.getEndDate());
     }
     if (recurrence.getNumberOfOccurrences() != null) {
       event.setRepeatCount(recurrence.getNumberOfOccurrences());
@@ -179,8 +242,18 @@ public class CalendarConverterService {
       if (occurrenceInfoCollection != null && occurrenceInfoCollection.getCount() > 0) {
         for (OccurrenceInfo occurrenceInfo : occurrenceInfoCollection) {
           Appointment occurenceAppointment = Appointment.bind(masterAppointment.getService(), occurrenceInfo.getItemId(), new PropertySet(BasePropertySet.FirstClassProperties));
-          CalendarEvent tmpEvent = getOccurenceOfDate(username, storage, masterEvent, occurrenceInfo.getOriginalStart(), timeZone);
-          if (verifyModifiedDatesConflict(tmpEvent, occurenceAppointment)) {
+
+          String exoId = correspondenceService.getCorrespondingId(username, occurenceAppointment.getId().getUniqueId());
+          CalendarEvent tmpEvent = null;
+          if (!StringUtils.isEmpty(exoId)) {
+            tmpEvent = storage.getEvent(username, exoId);
+          }
+          if (tmpEvent != null) {
+            continue;
+          }
+          tmpEvent = getOccurenceOfDate(username, storage, masterEvent, getExoDateFromExchangeFormat(occurrenceInfo.getOriginalStart()), timeZone);
+
+          if (tmpEvent != null && verifyModifiedDatesConflict(tmpEvent, occurenceAppointment)) {
             if (LOG.isTraceEnabled()) {
               LOG.trace("Attempting to update eXo Occurent Event with Exchange Event, but modification date of eXo is after, ignore updating.");
             }
@@ -309,37 +382,47 @@ public class CalendarConverterService {
     Recurrence recurrence = null;
     if (repeatType.equals(CalendarEvent.RP_DAILY)) {
       recurrence = new Recurrence.DailyPattern();
-    } else if (repeatType.equals(CalendarEvent.RP_WEEKEND)) {
-      recurrence = new Recurrence.WeeklyPattern();
+    } else if (repeatType.equals(CalendarEvent.RP_WEEKLY)) {
+      List<DayOfTheWeek> daysOfTheWeek = new ArrayList<DayOfTheWeek>();
+      String[] repeatDays = event.getRepeatByDay();
+      for (String repeatDay : repeatDays) {
+        if (StringUtils.isEmpty(repeatDay)) {
+          continue;
+        } else if (repeatDay.equals(CalendarEvent.RP_WEEKLY_BYDAY[0])) {
+          daysOfTheWeek.add(DayOfTheWeek.Monday);
+        } else if (repeatDay.equals(CalendarEvent.RP_WEEKLY_BYDAY[1])) {
+          daysOfTheWeek.add(DayOfTheWeek.Tuesday);
+        } else if (repeatDay.equals(CalendarEvent.RP_WEEKLY_BYDAY[2])) {
+          daysOfTheWeek.add(DayOfTheWeek.Wednesday);
+        } else if (repeatDay.equals(CalendarEvent.RP_WEEKLY_BYDAY[3])) {
+          daysOfTheWeek.add(DayOfTheWeek.Thursday);
+        } else if (repeatDay.equals(CalendarEvent.RP_WEEKLY_BYDAY[4])) {
+          daysOfTheWeek.add(DayOfTheWeek.Friday);
+        } else if (repeatDay.equals(CalendarEvent.RP_WEEKLY_BYDAY[5])) {
+          daysOfTheWeek.add(DayOfTheWeek.Saturday);
+        } else if (repeatDay.equals(CalendarEvent.RP_WEEKLY_BYDAY[6])) {
+          daysOfTheWeek.add(DayOfTheWeek.Sunday);
+        }
+      }
+      recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), daysOfTheWeek.toArray(new DayOfTheWeek[0]));
     } else if (repeatType.equals(CalendarEvent.RP_MONTHLY)) {
-      recurrence = new Recurrence.MonthlyPattern();
+      if (event.getRepeatByMonthDay() == null || event.getRepeatByMonthDay().length == 0) {
+        throw new IllegalStateException("event '" + event.getSummary() + "' is repeated monthly but value of dayOfMonth is null.");
+      }
+      recurrence = new Recurrence.MonthlyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), (int) event.getRepeatByMonthDay()[0]);
     } else if (repeatType.equals(CalendarEvent.RP_YEARLY)) {
-      recurrence = new Recurrence.YearlyPattern();
+      Calendar tempCalendar = Calendar.getInstance();
+      tempCalendar.set(Calendar.DAY_OF_YEAR, (int) event.getRepeatByYearDay()[0]);
+
+      int monthNumber = tempCalendar.get(Calendar.MONTH);
+      int dayOfMonth = tempCalendar.get(Calendar.DAY_OF_MONTH);
+
+      Month month = Month.values()[monthNumber];
+      recurrence = new Recurrence.YearlyPattern(event.getFromDateTime(), month, dayOfMonth);
     } else if (repeatType.equals(CalendarEvent.RP_WORKINGDAYS)) {
       recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Weekday);
     } else if (repeatType.equals(CalendarEvent.RP_WEEKEND)) {
       recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.WeekendDay);
-    } else {
-      if (repeatType.equals(CalendarEvent.RP_WEEKLY_BYDAY[0])) {
-        recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Monday);
-      } else if (repeatType.equals(CalendarEvent.RP_WEEKLY_BYDAY[1])) {
-        recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Tuesday);
-      }
-      if (repeatType.equals(CalendarEvent.RP_WEEKLY_BYDAY[2])) {
-        recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Wednesday);
-      }
-      if (repeatType.equals(CalendarEvent.RP_WEEKLY_BYDAY[3])) {
-        recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Thursday);
-      }
-      if (repeatType.equals(CalendarEvent.RP_WEEKLY_BYDAY[4])) {
-        recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Friday);
-      }
-      if (repeatType.equals(CalendarEvent.RP_WEEKLY_BYDAY[5])) {
-        recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Saturday);
-      }
-      if (repeatType.equals(CalendarEvent.RP_WEEKLY_BYDAY[6])) {
-        recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Sunday);
-      }
     }
 
     recurrence.setStartDate(event.getFromDateTime());
@@ -347,7 +430,7 @@ public class CalendarConverterService {
     if (event.getRepeatUntilDate() == null && event.getRepeatCount() < 1) {
       recurrence.neverEnds();
     } else if (event.getRepeatUntilDate() != null) {
-      recurrence.setEndDate(getExchangeDateFromExchangeFormat(event.getRepeatUntilDate()));
+      recurrence.setEndDate(event.getRepeatUntilDate());
     } else {
       recurrence.setNumberOfOccurrences((int) event.getRepeatCount());
     }
@@ -766,7 +849,7 @@ public class CalendarConverterService {
         break;
       }
     } else {
-      calendarEvent.setPriority(CalendarEvent.PRIORITY_NONE);
+      calendarEvent.setPriority(CalendarEvent.PRIORITY_NORMAL);
     }
   }
 
@@ -803,33 +886,50 @@ public class CalendarConverterService {
   }
 
   private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment, TimeZone timeZone) throws ServiceLocalException {
-    calendarEvent.setFromDateTime(getExoDateFromExchangeFormat(appointment.getStart()));
-    calendarEvent.setToDateTime(getExoDateFromExchangeFormat(appointment.getEnd()));
+    Calendar cal1 = getInstanceOfCurrentCalendar(timeZone);
+    Calendar cal2 = getInstanceOfCurrentCalendar(timeZone);
+
+    if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster)) {
+      cal1.setTimeInMillis(appointment.getRecurrence().getStartDate().getTime());
+    } else {
+      cal1.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getStart()).getTime());
+    }
+    cal2.setTimeInMillis(appointment.getEnd().getTime());
 
     if (appointment.getIsAllDayEvent()) {
-      Calendar cal1 = Calendar.getInstance(), cal2 = Calendar.getInstance();
-      cal1.setTime(calendarEvent.getFromDateTime());
-      // Set correct date
-      cal1.add(Calendar.HOUR_OF_DAY, 12);
-
-      // Set midnight hour
       cal1.set(Calendar.HOUR_OF_DAY, 0);
       cal1.set(Calendar.MINUTE, 0);
+      cal2.set(Calendar.HOUR_OF_DAY, cal2.getActualMaximum(Calendar.HOUR_OF_DAY));
+      cal2.add(Calendar.HOUR, 1);
 
-      cal2.setTime(calendarEvent.getToDateTime());
-      if (cal2.get(Calendar.HOUR_OF_DAY) == 0) {
-        cal2.add(Calendar.HOUR_OF_DAY, -1);
-      } else {
-        // Set correct date
-        cal2.add(Calendar.HOUR_OF_DAY, 12);
-      }
+      long diff = cal2.getTimeInMillis() - cal1.getTimeInMillis();
+      int nbDays = (int) TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
 
+      cal2.setTimeInMillis(cal1.getTimeInMillis());
+      cal2.add(Calendar.HOUR, nbDays * 24 - 1);
       cal2.set(Calendar.HOUR_OF_DAY, cal2.getActualMaximum(Calendar.HOUR_OF_DAY));
       cal2.set(Calendar.MINUTE, cal2.getActualMaximum(Calendar.MINUTE));
 
-      calendarEvent.setFromDateTime(convertToUserTimeZoneFormat(cal1.getTime(), timeZone));
-      calendarEvent.setToDateTime(convertToUserTimeZoneFormat(cal2.getTime(), timeZone));
+      calendarEvent.setFromDateTime(cal1.getTime());
+      calendarEvent.setToDateTime(cal2.getTime());
+    } else {
+      calendarEvent.setFromDateTime(getExoDateFromExchangeFormat(cal1.getTime()));
+      calendarEvent.setToDateTime(getExoDateFromExchangeFormat(cal2.getTime()));
     }
+
+  }
+
+  /**
+   * 
+   * @return return an instance of Calendar class which contains user's setting,
+   *         such as, time zone, first day of week.
+   */
+  public static Calendar getInstanceOfCurrentCalendar(TimeZone timeZone) {
+    Calendar calendar = Calendar.getInstance();
+    calendar.setLenient(false);
+    calendar.setTimeZone(timeZone);
+    return calendar;
+
   }
 
   private static Date convertToDefaultTimeZoneFormat(Date date) {
@@ -880,6 +980,14 @@ public class CalendarConverterService {
           category.setId(getCategoryName(categoryName));
           storage.saveEventCategory(username, category, true);
         }
+        calendarEvent.setEventCategoryId(category.getId());
+        calendarEvent.setEventCategoryName(category.getName());
+      }
+    } else {
+      EventCategory category = getEventCategoryByName(storage, username, NewUserListener.DEFAULT_EVENTCATEGORY_NAME_ALL);
+      if (category == null) {
+        LOG.warn("Default category (" + NewUserListener.DEFAULT_EVENTCATEGORY_NAME_ALL + ")of eXo Calendar is null for user: " + username + ".");
+      } else {
         calendarEvent.setEventCategoryId(category.getId());
         calendarEvent.setEventCategoryName(category.getName());
       }
@@ -956,6 +1064,10 @@ public class CalendarConverterService {
       case OOF:
         calendarEvent.setStatus(CalendarEvent.ST_OUTSIDE);
         calendarEvent.setEventState(CalendarEvent.ST_OUTSIDE);
+        break;
+      default:
+        calendarEvent.setStatus(CalendarEvent.ST_BUSY);
+        calendarEvent.setEventState(CalendarEvent.ST_BUSY);
         break;
       }
     }

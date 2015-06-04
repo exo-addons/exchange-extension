@@ -177,7 +177,8 @@ public class ExchangeStorageService implements Serializable {
     } else /*
             * test if appointment wasn't deleted by previous
             * 'toDeleteOccurences' List
-            */if (correspondenceService.getCorrespondingId(username, event.getId()) != null) {
+            */
+    if (correspondenceService.getCorrespondingId(username, event.getId()) != null) {
       if (LOG.isTraceEnabled()) {
         LOG.trace("Update Exchange Appointment: " + event.getSummary());
       }
@@ -188,7 +189,9 @@ public class ExchangeStorageService implements Serializable {
       if (checkDates) {
         Appointment tmpAppointment = Appointment.bind(service, appointment.getId());
         if (!tmpAppointment.getStart().equals(appointment.getStart())) {
-          LOG.warn("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
+          if (LOG.isTraceEnabled()) {
+            LOG.trace("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
+          }
           updateOrCreateExchangeAppointment(username, service, event, exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, false);
           return false;
         }
