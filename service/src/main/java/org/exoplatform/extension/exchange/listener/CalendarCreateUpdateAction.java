@@ -116,8 +116,7 @@ public class CalendarCreateUpdateAction implements Action {
 
   private boolean isNotLastPropertyToSet(Node node, Property property) throws Exception {
     return (property.getName().equals(Utils.EXO_PARTICIPANT_STATUS) && (!node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) || (node.hasProperty(Utils.EXO_REPEAT) && node.getProperty(Utils.EXO_REPEAT)
-        .getString().equals(CalendarEvent.RP_NOREPEAT))))
-        || (node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) && (property.getName().equals(Utils.EXO_REPEAT_BYMONTHDAY) || property.getName().equals(Utils.EXO_REPEAT_FINISH_DATE)));
+        .getString().equals(CalendarEvent.RP_NOREPEAT))));
   }
 
   private boolean isNodeValid(Node node) throws Exception {

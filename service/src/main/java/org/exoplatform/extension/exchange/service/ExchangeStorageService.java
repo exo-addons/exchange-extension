@@ -25,6 +25,9 @@ import microsoft.exchange.webservices.data.TimeZoneDefinition;
 import microsoft.exchange.webservices.data.WellKnownFolderName;
 
 import org.exoplatform.calendar.service.CalendarEvent;
+import org.exoplatform.calendar.service.CalendarService;
+import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
+import org.exoplatform.container.PortalContainer;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -157,6 +160,24 @@ public class ExchangeStorageService implements Serializable {
 
         if (toDeleteOccurences != null && !toDeleteOccurences.isEmpty()) {
           for (Appointment occAppointment : toDeleteOccurences) {
+
+            CalendarServiceImpl calendarService = (CalendarServiceImpl) PortalContainer.getInstance().getComponentInstanceOfType(CalendarService.class);
+            CalendarEvent tmpEvent = CalendarConverterService.getOccurenceOfDate(username, calendarService.getDataStorage(), event,
+                CalendarConverterService.getExoDateFromExchangeFormat(occAppointment.getOriginalStart()), userCalendarTimeZone);
+            if (tmpEvent != null) {
+              CalendarConverterService.convertExoToExchangeOccurenceEvent(occAppointment, tmpEvent, username, organizationService.getUserHandler(),
+                  getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+              if (LOG.isTraceEnabled()) {
+                LOG.trace("Create Exchange Exceptional Occurence Appointment: " + tmpEvent.getSummary());
+              }
+              occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
+              correspondenceService.setCorrespondingId(username, tmpEvent.getId(), occAppointment.getId().getUniqueId());
+              if (eventsToUpdateModifiedTime != null) {
+                eventsToUpdateModifiedTime.add(event);
+              }
+
+              continue;
+            }
             // Verify if deleted occurences is an exception existing occurence
             // or not
             String exoId = correspondenceService.getCorrespondingId(username, occAppointment.getId().getUniqueId());
@@ -174,11 +195,7 @@ public class ExchangeStorageService implements Serializable {
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       appointment.save(folderId);
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
-    } else /*
-            * test if appointment wasn't deleted by previous
-            * 'toDeleteOccurences' List
-            */
-    if (correspondenceService.getCorrespondingId(username, event.getId()) != null) {
+    } else {
       if (LOG.isTraceEnabled()) {
         LOG.trace("Update Exchange Appointment: " + event.getSummary());
       }
@@ -186,16 +203,16 @@ public class ExchangeStorageService implements Serializable {
       // TODO this is a workaround for a bug in EWS, when create new Allday
       // event in Exchange then modify it in eXo, the event in Exchange will
       // have wrong start and end dates. By saving it again, it will be fixed.
-      if (checkDates) {
-        Appointment tmpAppointment = Appointment.bind(service, appointment.getId());
-        if (!tmpAppointment.getStart().equals(appointment.getStart())) {
-          if (LOG.isTraceEnabled()) {
-            LOG.trace("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
-          }
-          updateOrCreateExchangeAppointment(username, service, event, exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, false);
-          return false;
-        }
-      }
+//      if (checkDates) {
+//        Appointment tmpAppointment = Appointment.bind(service, appointment.getId());
+//        if (!tmpAppointment.getStart().equals(appointment.getStart())) {
+//          if (LOG.isTraceEnabled()) {
+//            LOG.trace("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
+//          }
+//          updateOrCreateExchangeAppointment(username, service, event, exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, false);
+//          return false;
+//        }
+//      }
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
     }
     if (eventsToUpdateModifiedTime != null) {
@@ -254,7 +271,7 @@ public class ExchangeStorageService implements Serializable {
     try {
       appointment = Appointment.bind(service, itemId);
       if (LOG.isTraceEnabled()) {
-        LOG.info("Delete Exchange appointment: " + appointment.getSubject());
+        LOG.trace("Delete Exchange appointment: " + appointment.getSubject());
       }
       appointment.delete(DeleteMode.HardDelete);
     } catch (ServiceResponseException e) {

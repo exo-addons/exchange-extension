@@ -12,6 +12,10 @@ import java.util.List;
 import java.util.TimeZone;
 
 import javax.jcr.Node;
+import javax.jcr.NodeIterator;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryManager;
+import javax.jcr.query.QueryResult;
 
 import microsoft.exchange.webservices.data.Appointment;
 import microsoft.exchange.webservices.data.AppointmentSchema;
@@ -22,8 +26,10 @@ import microsoft.exchange.webservices.data.PropertySet;
 import org.exoplatform.calendar.service.Calendar;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
+import org.exoplatform.calendar.service.Utils;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
+import org.exoplatform.commons.utils.ISO8601;
 import org.exoplatform.extension.exchange.listener.CalendarCreateUpdateAction;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
@@ -352,17 +358,29 @@ public class ExoStorageService implements Serializable {
    * @throws Exception
    */
   public List<CalendarEvent> findExoEventsModifiedSince(String username, Calendar calendar, Date date) throws Exception {
-    List<CalendarEvent> resultEvents = new ArrayList<CalendarEvent>();
-    List<CalendarEvent> calendarEvents = getAllExoEvents(username, calendar);
-    for (CalendarEvent calendarEvent : calendarEvents) {
-      if (calendarEvent.getLastUpdatedTime() == null) {
-        continue;
-      }
-      if (calendarEvent.getLastUpdatedTime().after(date)) {
-        resultEvents.add(calendarEvent);
-      }
+    Node calendarHome = storage.getUserCalendarHome(username);
+    if (calendarHome.hasNode(calendar.getId())) {
+      calendarHome = calendarHome.getNode(calendar.getId());
     }
-    return resultEvents;
+    java.util.Calendar dateCalendar = java.util.Calendar.getInstance();
+    dateCalendar.setTime(date);
+    return getEventsByType(calendarHome, Calendar.TYPE_PRIVATE, dateCalendar);
+  }
+
+  private List<CalendarEvent> getEventsByType(Node calendarHome, int type, java.util.Calendar date) throws Exception {
+    List<CalendarEvent> events = new ArrayList<CalendarEvent>();
+    QueryManager qm = calendarHome.getSession().getWorkspace().getQueryManager();
+    Query query = qm.createQuery("select * from exo:calendarEvent where (jcr:path like '" + calendarHome.getPath() + "/%') and (exo:lastModifiedDate > TIMESTAMP '" + ISO8601.format(date)
+        + "')", Query.SQL);
+    QueryResult result = query.execute();
+    NodeIterator it = result.getNodes();
+    CalendarEvent calEvent;
+    while (it.hasNext()) {
+      calEvent = storage.getEvent(it.nextNode());
+      calEvent.setCalType(String.valueOf(type));
+      events.add(calEvent);
+    }
+    return events;
   }
 
   public void updateModifiedDateOfEvent(String username, CalendarEvent event) throws Exception {

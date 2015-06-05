@@ -349,6 +349,7 @@ public class IntegrationListener implements Startable {
         // This is used once, when user login
         if (firstSynchronization) {
           if (LOG.isTraceEnabled()) {
+            LOG.trace("---------------------");
             LOG.trace("run first synchronization for user: " + username);
           }
           // Verify modifications made on folders
@@ -358,6 +359,7 @@ public class IntegrationListener implements Startable {
           newSubscription();
         } else {
           if (LOG.isTraceEnabled()) {
+            LOG.trace("---------------------");
             LOG.trace("run scheduled synchronization for user: " + username);
           }
           // This is used in a scheduled task when the user session still alive
@@ -384,6 +386,7 @@ public class IntegrationListener implements Startable {
 
         if (LOG.isTraceEnabled()) {
           LOG.trace("Synchronization completed.");
+          LOG.trace("---------------------");
         }
       } catch (Exception e) {
         LOG.error("Error while synchronizing calndar entries.", e);

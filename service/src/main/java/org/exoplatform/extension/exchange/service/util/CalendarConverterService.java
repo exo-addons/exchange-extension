@@ -24,6 +24,7 @@ import microsoft.exchange.webservices.data.BasePropertySet;
 import microsoft.exchange.webservices.data.BodyType;
 import microsoft.exchange.webservices.data.DayOfTheWeek;
 import microsoft.exchange.webservices.data.DayOfTheWeekCollection;
+import microsoft.exchange.webservices.data.DayOfTheWeekIndex;
 import microsoft.exchange.webservices.data.DeletedOccurrenceInfo;
 import microsoft.exchange.webservices.data.DeletedOccurrenceInfoCollection;
 import microsoft.exchange.webservices.data.FileAttachment;
@@ -39,6 +40,8 @@ import microsoft.exchange.webservices.data.Recurrence;
 import microsoft.exchange.webservices.data.Recurrence.DailyPattern;
 import microsoft.exchange.webservices.data.Recurrence.IntervalPattern;
 import microsoft.exchange.webservices.data.Recurrence.MonthlyPattern;
+import microsoft.exchange.webservices.data.Recurrence.RelativeMonthlyPattern;
+import microsoft.exchange.webservices.data.Recurrence.RelativeYearlyPattern;
 import microsoft.exchange.webservices.data.Recurrence.WeeklyPattern;
 import microsoft.exchange.webservices.data.Recurrence.YearlyPattern;
 import microsoft.exchange.webservices.data.Sensitivity;
@@ -133,6 +136,7 @@ public class CalendarConverterService {
    * @param timeZone
    * @throws Exception
    */
+  @SuppressWarnings("deprecation")
   public static void convertExchangeToExoMasterRecurringCalendarEvent(CalendarEvent event, Appointment appointment, String username, JCRDataStorage storage, UserHandler userHandler, TimeZone timeZone)
       throws Exception {
     convertExchangeToExoEvent(event, appointment, username, storage, userHandler, timeZone);
@@ -191,18 +195,72 @@ public class CalendarConverterService {
         }
         event.setRepeatByDay(daysList.toArray(new String[0]));
       }
+    } else if (recurrence instanceof RelativeMonthlyPattern) {
+      event.setRepeatType(CalendarEvent.RP_MONTHLY);
+
+      DayOfTheWeekIndex dayOfTheWeekIndex = ((RelativeMonthlyPattern) recurrence).getDayOfTheWeekIndex();
+      int exoIndex = (dayOfTheWeekIndex.ordinal() + 2) % 6 - 1;
+      String dayPrefix = null;
+
+      switch (((RelativeMonthlyPattern) recurrence).getDayOfTheWeek()) {
+      case Monday:
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[0];
+        break;
+      case Tuesday:
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[1];
+        break;
+      case Wednesday:
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[2];
+        break;
+      case Thursday:
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[3];
+        break;
+      case Friday:
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[4];
+        break;
+      case Saturday:
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[5];
+        break;
+      case Sunday:
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[6];
+        break;
+      default:
+        LOG.error("Uknown day of the week '" + ((RelativeMonthlyPattern) recurrence).getDayOfTheWeek() + "', for recurrence '" + appointment.getSubject() + "', Monday will be set.");
+        dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[0];
+        break;
+      }
+
+      event.setRepeatByDay(new String[] { exoIndex + dayPrefix });
+      event.setRepeatByMonthDay(null);
     } else if (recurrence instanceof MonthlyPattern) {
       event.setRepeatType(CalendarEvent.RP_MONTHLY);
-      event.setRepeatByMonthDay(new long[] { ((MonthlyPattern) recurrence).getDayOfMonth() });
+      event.setRepeatByDay(null);
+      int dayOfMonth = 0;
+      try {
+        dayOfMonth = ((MonthlyPattern) recurrence).getDayOfMonth();
+      } catch (Exception e) {
+        dayOfMonth = recurrence.getStartDate().getDate();
+      }
+      event.setRepeatByMonthDay(new long[] { dayOfMonth });
     } else if (recurrence instanceof YearlyPattern) {
       event.setRepeatType(CalendarEvent.RP_YEARLY);
 
+      event.setRepeatInterval(1);
       Calendar tempCalendar = Calendar.getInstance();
       tempCalendar.set(Calendar.MONTH, ((YearlyPattern) recurrence).getMonth().ordinal());
-      tempCalendar.set(Calendar.DAY_OF_MONTH, ((YearlyPattern) recurrence).getDayOfMonth());
+      int dayOfMonth = 0;
+      try {
+        dayOfMonth = ((MonthlyPattern) recurrence).getDayOfMonth();
+      } catch (Exception e) {
+        dayOfMonth = recurrence.getStartDate().getDate();
+      }
+      tempCalendar.set(Calendar.DAY_OF_MONTH, dayOfMonth);
       int dayOfYear = tempCalendar.get(Calendar.DAY_OF_YEAR);
 
       event.setRepeatByYearDay(new long[] { dayOfYear });
+    } else if (recurrence instanceof RelativeYearlyPattern) {
+      LOG.error("Cannot manage events of type RelativeYearlyPattern.");
+      event.setRepeatType(CalendarEvent.RP_YEARLY);
     }
     if (recurrence instanceof IntervalPattern) {
       if (((IntervalPattern) recurrence).getInterval() > 0) {
@@ -210,7 +268,7 @@ public class CalendarConverterService {
       }
     }
     if (recurrence.getEndDate() != null) {
-      event.setRepeatUntilDate(recurrence.getEndDate());
+      event.setRepeatUntilDate(getExoDateFromExchangeFormat(recurrence.getEndDate()));
     }
     if (recurrence.getNumberOfOccurrences() != null) {
       event.setRepeatCount(recurrence.getNumberOfOccurrences());
@@ -248,10 +306,9 @@ public class CalendarConverterService {
           if (!StringUtils.isEmpty(exoId)) {
             tmpEvent = storage.getEvent(username, exoId);
           }
-          if (tmpEvent != null) {
-            continue;
+          if (tmpEvent == null) {
+            tmpEvent = getOccurenceOfDate(username, storage, masterEvent, getExoDateFromExchangeFormat(occurrenceInfo.getOriginalStart()), timeZone);
           }
-          tmpEvent = getOccurenceOfDate(username, storage, masterEvent, getExoDateFromExchangeFormat(occurrenceInfo.getOriginalStart()), timeZone);
 
           if (tmpEvent != null && verifyModifiedDatesConflict(tmpEvent, occurenceAppointment)) {
             if (LOG.isTraceEnabled()) {
@@ -286,11 +343,8 @@ public class CalendarConverterService {
     DeletedOccurrenceInfoCollection deletedOccurrenceInfoCollection = masterAppointment.getDeletedOccurrences();
     if (deletedOccurrenceInfoCollection != null && deletedOccurrenceInfoCollection.getCount() > 0) {
       for (DeletedOccurrenceInfo occurrenceInfo : deletedOccurrenceInfoCollection) {
-        CalendarEvent toDeleteEvent = getOccurenceOfDate(username, storage, masterEvent, occurrenceInfo.getOriginalStart(), timeZone);
+        CalendarEvent toDeleteEvent = getOccurenceOfDate(username, storage, masterEvent, getExoDateFromExchangeFormat(occurrenceInfo.getOriginalStart()), timeZone);
         if (toDeleteEvent == null) {
-          if (LOG.isTraceEnabled()) {
-            LOG.trace("Occurence is already deleted from recurrent Event: " + masterEvent.getSummary());
-          }
           continue;
         }
 
@@ -406,13 +460,68 @@ public class CalendarConverterService {
       }
       recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), daysOfTheWeek.toArray(new DayOfTheWeek[0]));
     } else if (repeatType.equals(CalendarEvent.RP_MONTHLY)) {
-      if (event.getRepeatByMonthDay() == null || event.getRepeatByMonthDay().length == 0) {
+      if ((event.getRepeatByMonthDay() == null || event.getRepeatByMonthDay().length == 0) && (event.getRepeatByDay() == null || event.getRepeatByDay().length == 0)) {
         throw new IllegalStateException("event '" + event.getSummary() + "' is repeated monthly but value of dayOfMonth is null.");
       }
-      recurrence = new Recurrence.MonthlyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), (int) event.getRepeatByMonthDay()[0]);
+      if ((event.getRepeatByMonthDay() != null || event.getRepeatByMonthDay().length > 0)) {
+        recurrence = new Recurrence.MonthlyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), (int) event.getRepeatByMonthDay()[0]);
+      } else if ((event.getRepeatByDay() != null || event.getRepeatByDay().length > 0)) {
+        String repeatByDay = event.getRepeatByDay()[0];
+        int weekIndex = Integer.parseInt(repeatByDay.substring(0, 1));
+        String dayPrefix = repeatByDay.substring(1);
+
+        DayOfTheWeek dayOfTheWeek = null;
+        DayOfTheWeekIndex dayOfTheWeekIndex = null;
+
+        if (dayPrefix.equals(CalendarEvent.RP_WEEKLY_BYDAY[0])) {
+          dayOfTheWeek = DayOfTheWeek.Monday;
+        } else if (dayPrefix.equals(CalendarEvent.RP_WEEKLY_BYDAY[1])) {
+          dayOfTheWeek = DayOfTheWeek.Tuesday;
+        } else if (dayPrefix.equals(CalendarEvent.RP_WEEKLY_BYDAY[2])) {
+          dayOfTheWeek = DayOfTheWeek.Wednesday;
+        } else if (dayPrefix.equals(CalendarEvent.RP_WEEKLY_BYDAY[3])) {
+          dayOfTheWeek = DayOfTheWeek.Thursday;
+        } else if (dayPrefix.equals(CalendarEvent.RP_WEEKLY_BYDAY[4])) {
+          dayOfTheWeek = DayOfTheWeek.Friday;
+        } else if (dayPrefix.equals(CalendarEvent.RP_WEEKLY_BYDAY[5])) {
+          dayOfTheWeek = DayOfTheWeek.Saturday;
+        } else if (dayPrefix.equals(CalendarEvent.RP_WEEKLY_BYDAY[6])) {
+          dayOfTheWeek = DayOfTheWeek.Sunday;
+        } else {
+          LOG.error("Can't get day of the week name from this prefix: '" + dayPrefix + "'. Monday will be used");
+          dayOfTheWeek = DayOfTheWeek.Monday;
+        }
+
+        switch (weekIndex) {
+        case -1:
+          dayOfTheWeekIndex = DayOfTheWeekIndex.Last;
+          break;
+        case 1:
+          dayOfTheWeekIndex = DayOfTheWeekIndex.First;
+          break;
+        case 2:
+          dayOfTheWeekIndex = DayOfTheWeekIndex.Second;
+          break;
+        case 3:
+          dayOfTheWeekIndex = DayOfTheWeekIndex.Third;
+          break;
+        case 4:
+          dayOfTheWeekIndex = DayOfTheWeekIndex.Fourth;
+          break;
+        default:
+          LOG.error("Can't get week index from this number: '" + weekIndex + "'. First week will be used as default value");
+          dayOfTheWeekIndex = DayOfTheWeekIndex.First;
+          break;
+        }
+        recurrence = new Recurrence.RelativeMonthlyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), dayOfTheWeek, dayOfTheWeekIndex);
+      }
     } else if (repeatType.equals(CalendarEvent.RP_YEARLY)) {
       Calendar tempCalendar = Calendar.getInstance();
-      tempCalendar.set(Calendar.DAY_OF_YEAR, (int) event.getRepeatByYearDay()[0]);
+      if (event.getRepeatByYearDay() != null && event.getRepeatByYearDay().length > 0) {
+        tempCalendar.set(Calendar.DAY_OF_YEAR, (int) event.getRepeatByYearDay()[0]);
+      } else {
+        tempCalendar.setTime(event.getFromDateTime());
+      }
 
       int monthNumber = tempCalendar.get(Calendar.MONTH);
       int dayOfMonth = tempCalendar.get(Calendar.DAY_OF_MONTH);
@@ -438,7 +547,7 @@ public class CalendarConverterService {
     appointment.setRecurrence(recurrence);
 
     if (event.getExcludeId() != null && event.getExcludeId().length > 0) {
-      toDeleteOccurences = getDeletedOccurences(appointment, event, userCalendarTimeZone);
+      toDeleteOccurences = calculateOccurences(username, appointment, event, userCalendarTimeZone);
 
       int nbOccurences = recurrence.getNumberOfOccurrences() == null ? 0 : recurrence.getNumberOfOccurrences();
       int deletedAppointmentOccurences = 0;
@@ -452,7 +561,7 @@ public class CalendarConverterService {
           deletedAppointmentOccurences = 0;
         }
       }
-      if ((nbOccurences - deletedAppointmentOccurences - toDeleteOccurences.size()) == 0) {
+      if (nbOccurences != 0 && (nbOccurences - deletedAppointmentOccurences - toDeleteOccurences.size()) == 0) {
         toDeleteOccurences.clear();
         toDeleteOccurences.add(appointment);
       }
@@ -613,10 +722,6 @@ public class CalendarConverterService {
         }
         indexCalendar.setTime(date);
       } catch (Exception e) {
-        // Recurence not found, can be deleted from Exchange.
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Error while getting occurence: " + recurrenceId + " of master appointment : " + masterAppointment.getSubject(), e);
-        }
         // increment date
         indexCalendar.add(Calendar.DATE, 1);
       }
@@ -638,8 +743,8 @@ public class CalendarConverterService {
     return calendar.getTime();
   }
 
-  private static CalendarEvent getOccurenceOfDate(String username, JCRDataStorage storage, CalendarEvent masterEvent, Date originalStart, TimeZone timeZone) throws Exception {
-    Date date = getExoDateFromExchangeFormat(originalStart);
+  public static CalendarEvent getOccurenceOfDate(String username, JCRDataStorage storage, CalendarEvent masterEvent, Date originalStart, TimeZone timeZone) throws Exception {
+    Date date = originalStart;
     String recurenceId = RECURRENCE_ID_FORMAT.format(date);
     List<CalendarEvent> exceptionEvents = storage.getExceptionEvents(username, masterEvent);
     if (exceptionEvents != null && !exceptionEvents.isEmpty()) {
@@ -688,7 +793,7 @@ public class CalendarConverterService {
     }
   }
 
-  private static List<Appointment> getDeletedOccurences(Appointment masterAppointment, CalendarEvent event, TimeZone userCalendarTimeZone) throws Exception {
+  private static List<Appointment> calculateOccurences(String username, Appointment masterAppointment, CalendarEvent event, TimeZone userCalendarTimeZone) throws Exception {
     List<Appointment> toDeleteOccurence = new ArrayList<Appointment>();
     String[] excludedRecurenceIds = event.getExcludeId();
     for (String excludedRecurenceId : excludedRecurenceIds) {
@@ -696,6 +801,7 @@ public class CalendarConverterService {
         continue;
       }
       Appointment occAppointment = getAppointmentOccurence(masterAppointment, excludedRecurenceId);
+
       if (occAppointment != null) {
         toDeleteOccurence.add(occAppointment);
       }
@@ -859,7 +965,6 @@ public class CalendarConverterService {
 
     if (isAllDay) {
       calendar.setTime(calendarEvent.getFromDateTime());
-      calendar.add(Calendar.HOUR_OF_DAY, 12);
 
       calendar.set(Calendar.HOUR_OF_DAY, 0);
       calendar.set(Calendar.MINUTE, 0);
@@ -872,7 +977,6 @@ public class CalendarConverterService {
 
     if (isAllDay) {
       calendar.setTime(calendarEvent.getToDateTime());
-      calendar.add(Calendar.HOUR_OF_DAY, -12);
 
       calendar.set(Calendar.HOUR_OF_DAY, 0);
       calendar.set(Calendar.MINUTE, 0);
@@ -890,31 +994,26 @@ public class CalendarConverterService {
     Calendar cal2 = getInstanceOfCurrentCalendar(timeZone);
 
     if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster)) {
-      cal1.setTimeInMillis(appointment.getRecurrence().getStartDate().getTime());
+      cal1.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getRecurrence().getStartDate()).getTime());
     } else {
       cal1.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getStart()).getTime());
     }
-    cal2.setTimeInMillis(appointment.getEnd().getTime());
+
+    cal2.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getEnd()).getTime());
 
     if (appointment.getIsAllDayEvent()) {
       cal1.set(Calendar.HOUR_OF_DAY, 0);
       cal1.set(Calendar.MINUTE, 0);
-      cal2.set(Calendar.HOUR_OF_DAY, cal2.getActualMaximum(Calendar.HOUR_OF_DAY));
-      cal2.add(Calendar.HOUR, 1);
+      cal2.add(Calendar.MILLISECOND, -1);
 
-      long diff = cal2.getTimeInMillis() - cal1.getTimeInMillis();
-      int nbDays = (int) TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
-
-      cal2.setTimeInMillis(cal1.getTimeInMillis());
-      cal2.add(Calendar.HOUR, nbDays * 24 - 1);
       cal2.set(Calendar.HOUR_OF_DAY, cal2.getActualMaximum(Calendar.HOUR_OF_DAY));
       cal2.set(Calendar.MINUTE, cal2.getActualMaximum(Calendar.MINUTE));
 
       calendarEvent.setFromDateTime(cal1.getTime());
       calendarEvent.setToDateTime(cal2.getTime());
     } else {
-      calendarEvent.setFromDateTime(getExoDateFromExchangeFormat(cal1.getTime()));
-      calendarEvent.setToDateTime(getExoDateFromExchangeFormat(cal2.getTime()));
+      calendarEvent.setFromDateTime(cal1.getTime());
+      calendarEvent.setToDateTime(cal2.getTime());
     }
 
   }
