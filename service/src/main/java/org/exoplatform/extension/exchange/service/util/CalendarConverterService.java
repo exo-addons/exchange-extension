@@ -1125,7 +1125,7 @@ public class CalendarConverterService {
           eXoAttachment.setSize(fileAttachment.getSize());
           Calendar calendar = Calendar.getInstance();
           calendar.setTime(fileAttachment.getLastModifiedTime());
-          eXoAttachment.setLastModified(calendar);
+          eXoAttachment.setLastModified(calendar.getTimeInMillis());
           attachments.add(eXoAttachment);
         }
       }
