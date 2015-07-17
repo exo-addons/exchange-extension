@@ -13,30 +13,7 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
-import microsoft.exchange.webservices.data.Appointment;
-import microsoft.exchange.webservices.data.AppointmentSchema;
-import microsoft.exchange.webservices.data.AppointmentType;
-import microsoft.exchange.webservices.data.Attachment;
-import microsoft.exchange.webservices.data.AttachmentCollection;
-import microsoft.exchange.webservices.data.Attendee;
-import microsoft.exchange.webservices.data.AttendeeCollection;
-import microsoft.exchange.webservices.data.BasePropertySet;
-import microsoft.exchange.webservices.data.BodyType;
-import microsoft.exchange.webservices.data.DayOfTheWeek;
-import microsoft.exchange.webservices.data.DayOfTheWeekCollection;
-import microsoft.exchange.webservices.data.DayOfTheWeekIndex;
-import microsoft.exchange.webservices.data.DeletedOccurrenceInfo;
-import microsoft.exchange.webservices.data.DeletedOccurrenceInfoCollection;
-import microsoft.exchange.webservices.data.FileAttachment;
-import microsoft.exchange.webservices.data.Importance;
-import microsoft.exchange.webservices.data.ItemId;
-import microsoft.exchange.webservices.data.LegacyFreeBusyStatus;
-import microsoft.exchange.webservices.data.MessageBody;
-import microsoft.exchange.webservices.data.Month;
-import microsoft.exchange.webservices.data.OccurrenceInfo;
-import microsoft.exchange.webservices.data.OccurrenceInfoCollection;
-import microsoft.exchange.webservices.data.PropertySet;
-import microsoft.exchange.webservices.data.Recurrence;
+import microsoft.exchange.webservices.data.*;
 import microsoft.exchange.webservices.data.Recurrence.DailyPattern;
 import microsoft.exchange.webservices.data.Recurrence.IntervalPattern;
 import microsoft.exchange.webservices.data.Recurrence.MonthlyPattern;
@@ -44,10 +21,6 @@ import microsoft.exchange.webservices.data.Recurrence.RelativeMonthlyPattern;
 import microsoft.exchange.webservices.data.Recurrence.RelativeYearlyPattern;
 import microsoft.exchange.webservices.data.Recurrence.WeeklyPattern;
 import microsoft.exchange.webservices.data.Recurrence.YearlyPattern;
-import microsoft.exchange.webservices.data.Sensitivity;
-import microsoft.exchange.webservices.data.ServiceLocalException;
-import microsoft.exchange.webservices.data.StringList;
-import microsoft.exchange.webservices.data.TimeZoneDefinition;
 
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang.StringUtils;
@@ -1117,9 +1090,20 @@ public class CalendarConverterService {
           if (fileAttachment.getSize() == 0) {
             continue;
           }
+          if (fileAttachment.getContentType()==null) {
+            //the mimetype of the attachment was not found => ignore the attachment
+            if (LOG.isTraceEnabled()) {
+
+              LOG.warn("Error on event " + appointment.getSubject() + ", start date : " + appointment.getStart() + ". The attachment " + fileAttachment.getName() + " have no mimetype. Ignore attachment");
+
+            }
+            continue;
+          }
           ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
           fileAttachment.load(outputStream);
           eXoAttachment.setInputStream(new ByteArrayInputStream(outputStream.toByteArray()));
+
+
           eXoAttachment.setMimeType(fileAttachment.getContentType());
           eXoAttachment.setName(fileAttachment.getName());
           eXoAttachment.setSize(fileAttachment.getSize());
@@ -1177,22 +1161,28 @@ public class CalendarConverterService {
     if (reminders != null) {
       reminders.clear();
     }
-    if (appointment.getIsReminderSet()) {
-      if (reminders == null) {
-        reminders = new ArrayList<Reminder>();
-        event.setReminders(reminders);
-      }
-      Reminder reminder = new Reminder();
-      reminder.setFromDateTime(appointment.getReminderDueBy());
-      reminder.setAlarmBefore(appointment.getReminderMinutesBeforeStart());
-      reminder.setDescription("");
-      reminder.setEventId(event.getId());
-      reminder.setReminderType(Reminder.TYPE_POPUP);
-      reminder.setReminderOwner(username);
-      reminder.setRepeate(false);
-      reminder.setRepeatInterval(appointment.getReminderMinutesBeforeStart());
+    try {
+      if (appointment.getIsReminderSet()) {
+        if (reminders == null) {
+          reminders = new ArrayList<Reminder>();
+          event.setReminders(reminders);
+        }
+        Reminder reminder = new Reminder();
+        reminder.setFromDateTime(appointment.getReminderDueBy());
+        reminder.setAlarmBefore(appointment.getReminderMinutesBeforeStart());
+        reminder.setDescription("");
+        reminder.setEventId(event.getId());
+        reminder.setReminderType(Reminder.TYPE_POPUP);
+        reminder.setReminderOwner(username);
+        reminder.setRepeate(false);
+        reminder.setRepeatInterval(appointment.getReminderMinutesBeforeStart());
 
-      reminders.add(reminder);
+        reminders.add(reminder);
+      }
+    } catch (ServiceObjectPropertyException se) {
+      //occurs when no reminder set in exchange event.
+      //to be checked
+      //do nothing
     }
   }
 
