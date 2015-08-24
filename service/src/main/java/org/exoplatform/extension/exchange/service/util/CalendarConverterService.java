@@ -821,10 +821,10 @@ public class CalendarConverterService {
           }
         } catch (Exception e) {
           Attendee attendee = null;
-          if (username.contains("@")) {
-            attendee = new Attendee(username.split("@")[0], username);
+          if (partacipant.contains("@")) {
+            attendee = new Attendee(partacipant.split("@")[0], partacipant);
           } else {
-            attendee = new Attendee(username, null);
+            attendee = new Attendee(partacipant, null);
           }
           attendees.add(attendee);
           if (LOG.isTraceEnabled()) {
