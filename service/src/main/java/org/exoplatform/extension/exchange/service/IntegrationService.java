@@ -497,15 +497,18 @@ public class IntegrationService implements Startable {
     if (organizationService instanceof ComponentRequestLifecycle) {
       ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
     }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    userProfile.setAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE, "" + time);
-    long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-    if (time > savedTime) {
-      userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
-    }
-    organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    try {
+      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+      userProfile.setAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE, "" + time);
+      long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
+      if (time > savedTime) {
+        userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
+      }
+      organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
+    } finally {
+      if (organizationService instanceof ComponentRequestLifecycle) {
+        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+      }
     }
   }
 
@@ -520,16 +523,19 @@ public class IntegrationService implements Startable {
     if (organizationService instanceof ComponentRequestLifecycle) {
       ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
     }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    long time = userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE));
-    Date lastSyncDate = null;
-    if (time > 0) {
-      lastSyncDate = new Date(time);
+    try {
+      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+      long time = userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE));
+      Date lastSyncDate = null;
+      if (time > 0) {
+        lastSyncDate = new Date(time);
+      }
+      return lastSyncDate;
+    } finally {
+      if (organizationService instanceof ComponentRequestLifecycle) {
+        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+      }
     }
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-    }
-    return lastSyncDate;
   }
 
   /**
@@ -544,18 +550,21 @@ public class IntegrationService implements Startable {
     if (organizationService instanceof ComponentRequestLifecycle) {
       ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
     }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-    if (savedTime <= 0) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("User '" + username + "' exo last check time was not set before, may be the synhronization was not run before or an error occured in the meantime.");
+    try {
+      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+      long savedTime = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
+      if (savedTime <= 0) {
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("User '" + username + "' exo last check time was not set before, may be the synhronization was not run before or an error occured in the meantime.");
+        }
+      } else {
+        userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
+        organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
       }
-    } else {
-      userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, "" + time);
-      organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
-    }
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    } finally {
+      if (organizationService instanceof ComponentRequestLifecycle) {
+        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+      }
     }
   }
 
@@ -570,16 +579,19 @@ public class IntegrationService implements Startable {
     if (organizationService instanceof ComponentRequestLifecycle) {
       ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
     }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    long time = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-    Date lastSyncDate = null;
-    if (time > 0) {
-      lastSyncDate = new Date(time);
+    try {
+      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+      long time = userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0 : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
+      Date lastSyncDate = null;
+      if (time > 0) {
+        lastSyncDate = new Date(time);
+      }
+      return lastSyncDate;
+    } finally {
+      if (organizationService instanceof ComponentRequestLifecycle) {
+        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+      }
     }
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-    }
-    return lastSyncDate;
   }
 
   /**
@@ -623,11 +635,14 @@ public class IntegrationService implements Startable {
     if (organizationService instanceof ComponentRequestLifecycle) {
       ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
     }
-    UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-    userProfile.setAttribute(name, value);
-    organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+    try {
+      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+      userProfile.setAttribute(name, value);
+      organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
+    } finally {
+      if (organizationService instanceof ComponentRequestLifecycle) {
+        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
+      }
     }
   }
 
