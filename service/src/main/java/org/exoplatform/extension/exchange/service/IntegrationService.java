@@ -723,6 +723,7 @@ public class IntegrationService implements Startable {
     }
   }
 
+  @SuppressWarnings("deprecation")
   private void synchronizeNewExoEvents(FolderId folderId, List<String> updatedExoEventIDs, Date exoLastSyncDate) throws Exception {
     // Search for existant Appointments in Exchange but not in eXo
     Iterable<CalendarEvent> unsynchronizedEvents = searchUnsynchronizedAppointments(username, folderId.getUniqueId());
@@ -768,6 +769,7 @@ public class IntegrationService implements Startable {
             // Already updated by previous operation
             continue;
           }
+          @SuppressWarnings("deprecation")
           Date eventModifDate = CalendarConverterService.convertDateToUTC(event.getLastUpdatedTime());
           Date itemModifDate = item.getLastModifiedTime();
           if (itemModifDate.after(eventModifDate)) {

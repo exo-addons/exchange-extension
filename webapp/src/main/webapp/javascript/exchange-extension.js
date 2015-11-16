@@ -56,9 +56,10 @@ require(["SHARED/jquery"], function( $ ) {
 		$('.ExchangeSettingsWindow').hide();
 		$('.ExchangeSettingsWindow').html("<div class='ExchangeSettingsTitle'><h6>Exchange Calendars</h6><button type='button' class='btn btn-primary ExchangeEditSettingsButton'>Edit settings</button></div><div class='ExchangeEditSettingsPanel'><div class='ExchangeEditSettingsTitle'></div><div class='ExchangeEditSettingsContent'></div><div class='ExchangeEditSettingsButtons'><button type='button' class='btn btn-primary ExchangeEditSettingsSaveButton'>Save</button><button type='button' class='btn ExchangeEditSettingsCancelButton'>Cancel</button></div></div><div class='ExchangeSettingsContent'></div>");
 		$(".ExchangeEditSettingsPanel").hide();
-		$(".ExchangeEditSettingsContent").html("<label for='serverName'>URL</label><input type='text' id='serverName' name='serverName' placeholder='https://server/EWS/Exchange.asmx'><br/>");
-		$(".ExchangeEditSettingsContent").append("<label for='username'>Username</label><input type='text' id='username' name='username' placeholder='username@domain'><br/>");
+		$(".ExchangeEditSettingsContent").html("<label for='serverName'>URL</label><input type='text' id='serverName' name='serverName' placeholder='http(s)://server/EWS/Exchange.asmx'><br/>");
+		$(".ExchangeEditSettingsContent").append("<label for='username'>Username</label><input type='text' id='username' name='username' placeholder='username or email'><br/>");
 		$(".ExchangeEditSettingsContent").append("<label for='password'>Password</label><input type='password' id='password' name='password' placeholder='******'><br/>");
+		$(".ExchangeEditSettingsContent").append("<label for='username'>Domain</label><input type='text' id='domainName' name='domainName' placeholder='Optional if same as email doamin'><br/>");
 
 		if(!$('.ExchangeSettingsMask') || $('.ExchangeSettingsMask').length == 0) {
 			$("body").append("<div class='ExchangeSettingsMask' />");
@@ -77,6 +78,7 @@ require(["SHARED/jquery"], function( $ ) {
 			$(".ExchangeEditSettingsContent #username").val("");
 			$(".ExchangeEditSettingsContent #password").val("");
 			$(".ExchangeEditSettingsContent #serverName").val("");
+			$(".ExchangeEditSettingsContent #domainName").val("");
 			
 			$(".ExchangeEditSettingsContent input").removeAttr("style");
 			$(".ExchangeEditSettingsContent label").removeAttr("style");
@@ -86,9 +88,15 @@ require(["SHARED/jquery"], function( $ ) {
 					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html('<div class="ExchangeSettingsError">Error getting settings from eXo Server.</div>');
 					return;
 				}
+				if(data.domainName) {
+					$(".ExchangeEditSettingsContent #domainName").val(data.domainName);
+				} else {
+					$(".ExchangeEditSettingsContent #domainName").val("");
+				}
 				if(data.serverName) {
 					$(".ExchangeEditSettingsContent #serverName").val(data.serverName);
 				} else {
+					$(".ExchangeEditSettingsContent #serverName").val("");
 				}
 				if(data.username) {
 					$(".ExchangeEditSettingsContent #username").val(data.username);
@@ -128,7 +136,7 @@ require(["SHARED/jquery"], function( $ ) {
 				exchangeSettingsNOK = true
 			} else {
 				$(".ExchangeEditSettingsContent #password").removeAttr("style");
-				$(".ExchangeEditSettingsContent label[for='serverName']").removeAttr("style");
+				$(".ExchangeEditSettingsContent label[for='password']").removeAttr("style");
 			}
 			if(exchangeSettingsNOK) {
 				return;
@@ -141,6 +149,7 @@ require(["SHARED/jquery"], function( $ ) {
 				url: "/portal/rest/exchange/settings",
 				data: JSON.stringify({
 						"serverName": $('.ExchangeEditSettingsContent #serverName').val(),
+						"domainName": $('.ExchangeEditSettingsContent #domainName').val(),
 						"username": $('.ExchangeEditSettingsContent #username').val(),
 						"password": $('.ExchangeEditSettingsContent #password').val()
 					  }),

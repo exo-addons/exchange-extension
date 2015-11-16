@@ -6,14 +6,37 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.concurrent.TimeUnit;
 
-import microsoft.exchange.webservices.data.*;
+import microsoft.exchange.webservices.data.Appointment;
+import microsoft.exchange.webservices.data.AppointmentSchema;
+import microsoft.exchange.webservices.data.AppointmentType;
+import microsoft.exchange.webservices.data.Attachment;
+import microsoft.exchange.webservices.data.AttachmentCollection;
+import microsoft.exchange.webservices.data.Attendee;
+import microsoft.exchange.webservices.data.AttendeeCollection;
+import microsoft.exchange.webservices.data.BasePropertySet;
+import microsoft.exchange.webservices.data.BodyType;
+import microsoft.exchange.webservices.data.DayOfTheWeek;
+import microsoft.exchange.webservices.data.DayOfTheWeekCollection;
+import microsoft.exchange.webservices.data.DayOfTheWeekIndex;
+import microsoft.exchange.webservices.data.DeletedOccurrenceInfo;
+import microsoft.exchange.webservices.data.DeletedOccurrenceInfoCollection;
+import microsoft.exchange.webservices.data.FileAttachment;
+import microsoft.exchange.webservices.data.Importance;
+import microsoft.exchange.webservices.data.ItemId;
+import microsoft.exchange.webservices.data.LegacyFreeBusyStatus;
+import microsoft.exchange.webservices.data.MessageBody;
+import microsoft.exchange.webservices.data.Month;
+import microsoft.exchange.webservices.data.OccurrenceInfo;
+import microsoft.exchange.webservices.data.OccurrenceInfoCollection;
+import microsoft.exchange.webservices.data.PropertySet;
+import microsoft.exchange.webservices.data.Recurrence;
 import microsoft.exchange.webservices.data.Recurrence.DailyPattern;
 import microsoft.exchange.webservices.data.Recurrence.IntervalPattern;
 import microsoft.exchange.webservices.data.Recurrence.MonthlyPattern;
@@ -21,9 +44,15 @@ import microsoft.exchange.webservices.data.Recurrence.RelativeMonthlyPattern;
 import microsoft.exchange.webservices.data.Recurrence.RelativeYearlyPattern;
 import microsoft.exchange.webservices.data.Recurrence.WeeklyPattern;
 import microsoft.exchange.webservices.data.Recurrence.YearlyPattern;
+import microsoft.exchange.webservices.data.Sensitivity;
+import microsoft.exchange.webservices.data.ServiceLocalException;
+import microsoft.exchange.webservices.data.ServiceObjectPropertyException;
+import microsoft.exchange.webservices.data.StringList;
+import microsoft.exchange.webservices.data.TimeZoneDefinition;
 
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang.StringUtils;
+import org.apache.tika.mime.MimeTypes;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.EventCategory;
 import org.exoplatform.calendar.service.Reminder;
@@ -343,6 +372,7 @@ public class CalendarConverterService {
    * @return
    * @throws Exception
    */
+  @SuppressWarnings("deprecation")
   public static boolean verifyModifiedDatesConflict(CalendarEvent event, Appointment item) throws Exception {
     if (event.getLastUpdatedTime() == null) {
       return false;
@@ -519,7 +549,7 @@ public class CalendarConverterService {
 
     appointment.setRecurrence(recurrence);
 
-    if (event.getExcludeId() != null && event.getExcludeId().length > 0) {
+    if (event.getExceptionIds() != null && event.getExceptionIds().size() > 0) {
       toDeleteOccurences = calculateOccurences(username, appointment, event, userCalendarTimeZone);
 
       int nbOccurences = recurrence.getNumberOfOccurrences() == null ? 0 : recurrence.getNumberOfOccurrences();
@@ -640,8 +670,7 @@ public class CalendarConverterService {
 
     cal1.setTime(eventCalendar.getFromDateTime());
     cal2.setTime(eventCalendar.getToDateTime());
-    return (cal1.get(Calendar.HOUR_OF_DAY) == 0 && cal1.get(Calendar.MINUTE) == 0 && cal2.get(Calendar.HOUR_OF_DAY) == cal2.getActualMaximum(Calendar.HOUR_OF_DAY) && cal2.get(Calendar.MINUTE) == cal2
-        .getActualMaximum(Calendar.MINUTE));
+    return (cal1.get(Calendar.HOUR_OF_DAY) == 0 && cal1.get(Calendar.MINUTE) == 0 && cal2.get(Calendar.HOUR_OF_DAY) == cal2.getActualMaximum(Calendar.HOUR_OF_DAY) && cal2.get(Calendar.MINUTE) == cal2.getActualMaximum(Calendar.MINUTE));
   }
 
   public static Date convertDateToUTC(Date date) throws ParseException {
@@ -706,15 +735,16 @@ public class CalendarConverterService {
     return appointment;
   }
 
-  private static Date getExchangeDateFromExchangeFormat(Date date) {
-    int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
-
-    Calendar calendar = Calendar.getInstance();
-    calendar.setTime(date);
-    calendar.add(Calendar.MINUTE, -exchangeOffset);
-
-    return calendar.getTime();
-  }
+  // private static Date getExchangeDateFromExchangeFormat(Date date) {
+  // int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) /
+  // 60000;
+  //
+  // Calendar calendar = Calendar.getInstance();
+  // calendar.setTime(date);
+  // calendar.add(Calendar.MINUTE, -exchangeOffset);
+  //
+  // return calendar.getTime();
+  // }
 
   public static CalendarEvent getOccurenceOfDate(String username, JCRDataStorage storage, CalendarEvent masterEvent, Date originalStart, TimeZone timeZone) throws Exception {
     Date date = originalStart;
@@ -768,15 +798,17 @@ public class CalendarConverterService {
 
   private static List<Appointment> calculateOccurences(String username, Appointment masterAppointment, CalendarEvent event, TimeZone userCalendarTimeZone) throws Exception {
     List<Appointment> toDeleteOccurence = new ArrayList<Appointment>();
-    String[] excludedRecurenceIds = event.getExcludeId();
-    for (String excludedRecurenceId : excludedRecurenceIds) {
-      if (excludedRecurenceId.isEmpty()) {
-        continue;
-      }
-      Appointment occAppointment = getAppointmentOccurence(masterAppointment, excludedRecurenceId);
+    Collection<String> excludedRecurenceIds = event.getExceptionIds();
+    if (excludedRecurenceIds != null) {
+      for (String excludedRecurenceId : excludedRecurenceIds) {
+        if (excludedRecurenceId.isEmpty()) {
+          continue;
+        }
+        Appointment occAppointment = getAppointmentOccurence(masterAppointment, excludedRecurenceId);
 
-      if (occAppointment != null) {
-        toDeleteOccurence.add(occAppointment);
+        if (occAppointment != null) {
+          toDeleteOccurence.add(occAppointment);
+        }
       }
     }
     return toDeleteOccurence;
@@ -793,8 +825,7 @@ public class CalendarConverterService {
   }
 
   private static boolean isSameDate(java.util.Calendar date1, java.util.Calendar date2) {
-    return (date1.get(java.util.Calendar.DATE) == date2.get(java.util.Calendar.DATE) && date1.get(java.util.Calendar.MONTH) == date2.get(java.util.Calendar.MONTH) && date1
-        .get(java.util.Calendar.YEAR) == date2.get(java.util.Calendar.YEAR));
+    return (date1.get(java.util.Calendar.DATE) == date2.get(java.util.Calendar.DATE) && date1.get(java.util.Calendar.MONTH) == date2.get(java.util.Calendar.MONTH) && date1.get(java.util.Calendar.YEAR) == date2.get(java.util.Calendar.YEAR));
   }
 
   private static void setAppointmentAttendees(Appointment appointment, CalendarEvent calendarEvent, UserHandler userHandler, String username) throws ServiceLocalException {
@@ -1014,16 +1045,18 @@ public class CalendarConverterService {
     return calendar.getTime();
   }
 
-  private static Date convertToUserTimeZoneFormat(Date date, TimeZone timeZone) {
-    int originalOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
-    int userTZOffset = timeZone.getRawOffset() / 60000;
-
-    Calendar calendar = Calendar.getInstance();
-    calendar.setTime(date);
-    calendar.add(Calendar.MINUTE, originalOffset - userTZOffset);
-
-    return calendar.getTime();
-  }
+  // private static Date convertToUserTimeZoneFormat(Date date, TimeZone
+  // timeZone) {
+  // int originalOffset = TimeZone.getDefault().getOffset(date.getTime()) /
+  // 60000;
+  // int userTZOffset = timeZone.getRawOffset() / 60000;
+  //
+  // Calendar calendar = Calendar.getInstance();
+  // calendar.setTime(date);
+  // calendar.add(Calendar.MINUTE, originalOffset - userTZOffset);
+  //
+  // return calendar.getTime();
+  // }
 
   private static void setAppointmentCategory(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
     if (appointment.getCategories() != null) {
@@ -1080,7 +1113,8 @@ public class CalendarConverterService {
 
   private static void setEventAttachements(CalendarEvent calendarEvent, Appointment appointment) throws Exception {
     if (appointment.getHasAttachments()) {
-      Iterator<Attachment> attachmentIterator = appointment.getAttachments().iterator();
+      Appointment appointmentWithAttachment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.Attachments));
+      Iterator<Attachment> attachmentIterator = appointmentWithAttachment.getAttachments().iterator();
       List<org.exoplatform.calendar.service.Attachment> attachments = new ArrayList<org.exoplatform.calendar.service.Attachment>();
       while (attachmentIterator.hasNext()) {
         Attachment attachment = attachmentIterator.next();
@@ -1088,23 +1122,23 @@ public class CalendarConverterService {
           FileAttachment fileAttachment = (FileAttachment) attachment;
           org.exoplatform.calendar.service.Attachment eXoAttachment = new org.exoplatform.calendar.service.Attachment();
           if (fileAttachment.getSize() == 0) {
+            LOG.warn("Attachment '" + fileAttachment.getName() + "' of Appoitment " + appointment.getSubject() + ", start date : " + appointment.getStart() + " is empty, ignore it.");
             continue;
           }
-          if (fileAttachment.getContentType()==null) {
-            //the mimetype of the attachment was not found => ignore the attachment
+          String contentType = fileAttachment.getContentType();
+          if (contentType == null) {
+            contentType = MimeTypes.OCTET_STREAM;
+            // the mimetype of the attachment was not found
             if (LOG.isTraceEnabled()) {
-
-              LOG.warn("Error on event " + appointment.getSubject() + ", start date : " + appointment.getStart() + ". The attachment " + fileAttachment.getName() + " have no mimetype. Ignore attachment");
-
+              LOG.warn("No mimetype was found for attachement  '" + fileAttachment.getName() + "' of Appoitment " + appointment.getSubject() + ", start date : " + appointment.getStart()
+                  + ". Use default: " + contentType);
             }
-            continue;
           }
           ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
           fileAttachment.load(outputStream);
           eXoAttachment.setInputStream(new ByteArrayInputStream(outputStream.toByteArray()));
 
-
-          eXoAttachment.setMimeType(fileAttachment.getContentType());
+          eXoAttachment.setMimeType(contentType);
           eXoAttachment.setName(fileAttachment.getName());
           eXoAttachment.setSize(fileAttachment.getSize());
           Calendar calendar = Calendar.getInstance();
@@ -1112,6 +1146,9 @@ public class CalendarConverterService {
           eXoAttachment.setLastModified(calendar.getTimeInMillis());
           attachments.add(eXoAttachment);
         }
+      }
+      if (attachments.isEmpty()) {
+        LOG.warn("Appointment has attachments, but it wasn't retrieved to eXo Calendar Event");
       }
       calendarEvent.setAttachment(attachments);
     }
@@ -1180,9 +1217,9 @@ public class CalendarConverterService {
         reminders.add(reminder);
       }
     } catch (ServiceObjectPropertyException se) {
-      //occurs when no reminder set in exchange event.
-      //to be checked
-      //do nothing
+      // occurs when no reminder set in exchange event.
+      // to be checked
+      // do nothing
     }
   }
 

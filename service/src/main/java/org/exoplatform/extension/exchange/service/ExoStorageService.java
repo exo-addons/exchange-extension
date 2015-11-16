@@ -26,7 +26,6 @@ import microsoft.exchange.webservices.data.PropertySet;
 import org.exoplatform.calendar.service.Calendar;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
-import org.exoplatform.calendar.service.Utils;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
 import org.exoplatform.commons.utils.ISO8601;
@@ -370,8 +369,7 @@ public class ExoStorageService implements Serializable {
   private List<CalendarEvent> getEventsByType(Node calendarHome, int type, java.util.Calendar date) throws Exception {
     List<CalendarEvent> events = new ArrayList<CalendarEvent>();
     QueryManager qm = calendarHome.getSession().getWorkspace().getQueryManager();
-    Query query = qm.createQuery("select * from exo:calendarEvent where (jcr:path like '" + calendarHome.getPath() + "/%') and (exo:lastModifiedDate > TIMESTAMP '" + ISO8601.format(date)
-        + "')", Query.SQL);
+    Query query = qm.createQuery("select * from exo:calendarEvent where (jcr:path like '" + calendarHome.getPath() + "/%') and (exo:lastModifiedDate > TIMESTAMP '" + ISO8601.format(date) + "')", Query.SQL);
     QueryResult result = query.execute();
     NodeIterator it = result.getNodes();
     CalendarEvent calEvent;
@@ -487,11 +485,11 @@ public class ExoStorageService implements Serializable {
             } else {
               isLastOccurenceDeleted = tmpAppointment.getLastOccurrence().getEnd().getTime() < recEndDate.getTime();
 
-              if (isLastOccurenceDeleted && masterEvent.getExcludeId() != null) {
+              if (isLastOccurenceDeleted && masterEvent.getExceptionIds() != null) {
                 String pattern = EXCLUDE_ID_FORMAT_FIRST_CHARS.format(recEndDate);
                 int i = 0;
-                while (isLastOccurenceDeleted && i < masterEvent.getExcludeId().length) {
-                  isLastOccurenceDeleted = !masterEvent.getExcludeId()[i].startsWith(pattern);
+                while (isLastOccurenceDeleted && i < masterEvent.getExceptionIds().size()) {
+                  isLastOccurenceDeleted = !((String) masterEvent.getExceptionIds().toArray()[i]).startsWith(pattern);
                   i++;
                 }
               }
@@ -520,8 +518,8 @@ public class ExoStorageService implements Serializable {
           if (isNew) {
             correspondenceService.setCorrespondingId(username, masterEvent.getId(), appointment.getId().getUniqueId());
           } else if (!CalendarConverterService.isSameDate(orginialStartDate, masterEvent.getFromDateTime())) {
-            if (masterEvent.getExcludeId() == null) {
-              masterEvent.setExcludeId(new String[0]);
+            if (masterEvent.getExceptionIds() == null) {
+              masterEvent.setExceptionIds(new ArrayList<String>());
             }
           }
 
@@ -535,8 +533,7 @@ public class ExoStorageService implements Serializable {
         List<CalendarEvent> exceptionalEventsToUpdate = new ArrayList<CalendarEvent>();
         List<String> occAppointmentIDs = new ArrayList<String>();
         // Deleted execptional occurences events.
-        List<CalendarEvent> toDeleteEvents = CalendarConverterService.convertExchangeToExoOccurenceEvent(masterEvent, exceptionalEventsToUpdate, occAppointmentIDs, appointment, username, storage,
-            organizationService.getUserHandler(), correspondenceService, timeZone);
+        List<CalendarEvent> toDeleteEvents = CalendarConverterService.convertExchangeToExoOccurenceEvent(masterEvent, exceptionalEventsToUpdate, occAppointmentIDs, appointment, username, storage, organizationService.getUserHandler(), correspondenceService, timeZone);
         if (exceptionalEventsToUpdate != null && !exceptionalEventsToUpdate.isEmpty()) {
           storage.updateOccurrenceEvent(calendar.getId(), calendar.getId(), masterEvent.getCalType(), masterEvent.getCalType(), exceptionalEventsToUpdate, username);
 

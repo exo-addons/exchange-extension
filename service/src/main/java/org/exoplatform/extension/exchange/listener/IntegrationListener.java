@@ -158,12 +158,12 @@ public class IntegrationListener implements Startable {
       String exchangeStoredServerName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
       String exchangeStoredDomainName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
       String exchangeStoredPassword = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE);
-      userLoggedIn(username, exchangeStoredUsername, exchangeStoredPassword, exchangeStoredDomainName, exchangeStoredServerName);
+      startExchangeSynchronizationTask(username, exchangeStoredUsername, exchangeStoredPassword, exchangeStoredDomainName, exchangeStoredServerName);
     } else if (exchangeDomain != null && exchangeServerURL != null) {
       if (LOG.isTraceEnabled()) {
         LOG.trace("Exchange Synchronization Service: User '" + username + "' have not yet set parameters, use default Exchange server settings.");
       }
-      userLoggedIn(username, username, password, exchangeDomain, exchangeServerURL);
+      startExchangeSynchronizationTask(username, username, password, exchangeDomain, exchangeServerURL);
     } else {
       LOG.warn("Exchange Service is unvailable, please set parameters.");
     }
@@ -178,7 +178,7 @@ public class IntegrationListener implements Startable {
    * @param exchangeDomain
    * @param exchangeServerURL
    */
-  public void userLoggedIn(final String username, String exchangeUsername, final String password, String exchangeDomain, String exchangeServerURL) {
+  public void startExchangeSynchronizationTask(final String username, String exchangeUsername, final String password, String exchangeDomain, String exchangeServerURL) {
     try {
       exchangeUsername = exchangeUsername.trim();
       Identity identity = identityRegistry.getIdentity(username);
@@ -285,17 +285,59 @@ public class IntegrationListener implements Startable {
       this.firstSynchronization = true;
 
       ExchangeService service = new ExchangeService(ExchangeVersion.Exchange2010_SP1, TimeZone.getDefault());
-      ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword);
+      service.setTimeout(300000);
+      ExchangeCredentials credentials = null;
+      // Try with domain name if it's not empty
+      if (exchangeDomain != null) {
+        // Test authentication with
+        // "exchangeUsername, exchangePassword, exchangeDomain"
+        credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
+      } else {
+        // Test authentication with "exchangeUsername, exchangePassword"
+        credentials = new WebCredentials(exchangeUsername, exchangePassword);
+      }
       service.setCredentials(credentials);
       service.setUrl(new URI(exchangeServerURL));
 
       try {
         service.getInboxRules();
       } catch (Exception e) {
-        if ((exchangeDomain == null || exchangeDomain.isEmpty()) && exchangeUsername.contains("@")) {
+
+        boolean authenticated = false;
+        if (exchangeDomain != null) {
+          // Test authentication with "exchangeUsername, exchangePassword" if
+          // domainName not null
+          credentials = new WebCredentials(exchangeUsername, exchangePassword);
+          try {
+            service.setCredentials(credentials);
+            service.setUrl(new URI(exchangeServerURL));
+
+            service.getInboxRules();
+            authenticated = true;
+          } catch (Exception exp) {
+            if (!exchangeUsername.contains("@")) {
+              // Test authentication with
+              // "exchangeUsername@domainName, exchangePassword" if domainName
+              // not null
+              credentials = new WebCredentials(exchangeUsername + "@" + exchangeDomain, exchangePassword);
+              try {
+                service.setCredentials(credentials);
+                service.setUrl(new URI(exchangeServerURL));
+
+                service.getInboxRules();
+                authenticated = true;
+              } catch (Exception exp2) {}
+
+            }
+          }
+        }
+        if (!authenticated && (exchangeDomain == null || exchangeDomain.isEmpty()) && exchangeUsername.contains("@")) {
           String[] parts = exchangeUsername.split("@");
           exchangeUsername = parts[0];
           exchangeDomain = parts[1];
+          // Test authentication with
+          // "exchangeUsername, exchangePassword" and domainName extracted from
+          // username
           credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
           service.setCredentials(credentials);
           service.setUrl(new URI(exchangeServerURL));

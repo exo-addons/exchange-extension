@@ -141,10 +141,6 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
       String exchangeDomainName = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
       String exchangeUsername = IntegrationService.getUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_USERNAME_ATTRIBUTE);
 
-      if (!exchangeUsername.contains("@")) {
-        exchangeUsername = exchangeUsername + "@" + exchangeDomainName;
-      }
-
       settings.setServerName(exchangeServerName == null ? integrationListener.exchangeServerURL : exchangeServerName);
       settings.setDomainName(exchangeDomainName == null ? integrationListener.exchangeDomain : exchangeDomainName);
       settings.setUsername(exchangeUsername == null ? username : exchangeUsername);
@@ -169,7 +165,7 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
       IntegrationService.setUserArrtibute(organizationService, username, IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE, settings.getPassword());
 
       integrationListener.userLoggedOut(username);
-      integrationListener.userLoggedIn(username, settings.getUsername(), settings.getPassword(), settings.getDomainName(), settings.getServerName());
+      integrationListener.startExchangeSynchronizationTask(username, settings.getUsername(), settings.getPassword(), settings.getDomainName(), settings.getServerName());
 
       return Response.ok().cacheControl(cc).build();
     } catch (Exception e) {
