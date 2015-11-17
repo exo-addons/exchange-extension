@@ -8,7 +8,7 @@
 	</parent>
 	<groupId>org.exoplatform.addons.exchange</groupId>
 	<artifactId>exchange-extension-parent</artifactId>
-	<version>1.1.x-SNAPSHOT</version>
+	<version>1.1.0</version>
 	<packaging>pom</packaging>
 	<name>eXo Platform - addons - Exchange extension - parent</name>
 	<description>eXo Platform - addons - Exchange extension - parent</description>
@@ -23,7 +23,7 @@
 		<connection>scm:git:git://github.com/exo-addons/exchange-extension.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/exo-addons/exchange-extension.git</developerConnection>
 		<url>https://github.com/exo-addons/exchange-extension</url>
-		<tag>1.1</tag>
+		<tag>1.1.0</tag>
 	</scm>
 	<properties>
 		<maven.compiler.target>1.7</maven.compiler.target>
