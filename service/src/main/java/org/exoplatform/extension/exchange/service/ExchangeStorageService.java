@@ -20,6 +20,8 @@ import microsoft.exchange.webservices.data.FolderView;
 import microsoft.exchange.webservices.data.Item;
 import microsoft.exchange.webservices.data.ItemId;
 import microsoft.exchange.webservices.data.PropertySet;
+import microsoft.exchange.webservices.data.SendInvitationsMode;
+import microsoft.exchange.webservices.data.SendInvitationsOrCancellationsMode;
 import microsoft.exchange.webservices.data.ServiceResponseException;
 import microsoft.exchange.webservices.data.TimeZoneDefinition;
 import microsoft.exchange.webservices.data.WellKnownFolderName;
@@ -127,8 +129,7 @@ public class ExchangeStorageService implements Serializable {
         }
         appointment = new Appointment(service);
       }
-      CalendarConverterService
-          .convertExoToExchangeEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+      CalendarConverterService.convertExoToExchangeEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
     } else {
       if ((event.getRecurrenceId() != null && !event.getRecurrenceId().isEmpty()) || (event.getIsExceptionOccurrence() != null && event.getIsExceptionOccurrence())) {
         if (isNew) {
@@ -141,8 +142,7 @@ public class ExchangeStorageService implements Serializable {
             appointment = new Appointment(service);
           }
         }
-        CalendarConverterService.convertExoToExchangeOccurenceEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone),
-            userCalendarTimeZone);
+        CalendarConverterService.convertExoToExchangeOccurenceEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
       } else {
         if (isNew) {
           // Checks if this event was already in Exchange, if it's the case, it
@@ -155,22 +155,30 @@ public class ExchangeStorageService implements Serializable {
           }
           appointment = new Appointment(service);
         }
-        List<Appointment> toDeleteOccurences = CalendarConverterService.convertExoToExchangeMasterRecurringCalendarEvent(appointment, event, username, organizationService.getUserHandler(),
-            getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+        List<Appointment> toDeleteOccurences = CalendarConverterService.convertExoToExchangeMasterRecurringCalendarEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
 
         if (toDeleteOccurences != null && !toDeleteOccurences.isEmpty()) {
           for (Appointment occAppointment : toDeleteOccurences) {
 
             CalendarServiceImpl calendarService = (CalendarServiceImpl) PortalContainer.getInstance().getComponentInstanceOfType(CalendarService.class);
-            CalendarEvent tmpEvent = CalendarConverterService.getOccurenceOfDate(username, calendarService.getDataStorage(), event,
-                CalendarConverterService.getExoDateFromExchangeFormat(occAppointment.getOriginalStart()), userCalendarTimeZone);
+            CalendarEvent tmpEvent = CalendarConverterService.getOccurenceOfDate(username, calendarService.getDataStorage(), event, CalendarConverterService.getExoDateFromExchangeFormat(occAppointment.getOriginalStart()), userCalendarTimeZone);
             if (tmpEvent != null) {
-              CalendarConverterService.convertExoToExchangeOccurenceEvent(occAppointment, tmpEvent, username, organizationService.getUserHandler(),
-                  getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+              CalendarConverterService.convertExoToExchangeOccurenceEvent(occAppointment, tmpEvent, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
               if (LOG.isTraceEnabled()) {
                 LOG.trace("Create Exchange Exceptional Occurence Appointment: " + tmpEvent.getSummary());
               }
-              occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
+              try {
+                occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
+              } catch (ServiceResponseException e) {
+                if (e.getMessage() != null && e.getMessage().contains("At least one recipient isn't valid")) {
+                  if (LOG.isTraceEnabled()) {
+                    LOG.warn("Error while saving appointment", e);
+                  }
+                  occAppointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToNone);
+                } else {
+                  throw e;
+                }
+              }
               correspondenceService.setCorrespondingId(username, tmpEvent.getId(), occAppointment.getId().getUniqueId());
               if (eventsToUpdateModifiedTime != null) {
                 eventsToUpdateModifiedTime.add(event);
@@ -193,26 +201,50 @@ public class ExchangeStorageService implements Serializable {
         LOG.trace("Create Exchange Appointment: " + event.getSummary());
       }
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
-      appointment.save(folderId);
+      try {
+        appointment.save(folderId);
+      } catch (ServiceResponseException e) {
+        if (e.getMessage() != null && e.getMessage().contains("At least one recipient isn't valid")) {
+          if (LOG.isTraceEnabled()) {
+            LOG.warn("Error while saving appointment", e);
+          }
+          appointment.save(folderId, SendInvitationsMode.SendToNone);
+        } else {
+          throw e;
+        }
+      }
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
     } else {
       if (LOG.isTraceEnabled()) {
         LOG.trace("Update Exchange Appointment: " + event.getSummary());
       }
-      appointment.update(ConflictResolutionMode.AlwaysOverwrite);
+      try {
+        appointment.update(ConflictResolutionMode.AlwaysOverwrite);
+      } catch (ServiceResponseException e) {
+        if (e.getMessage() != null && e.getMessage().contains("At least one recipient isn't valid")) {
+          if (LOG.isTraceEnabled()) {
+            LOG.warn("Error while saving appointment", e);
+          }
+          appointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToNone);
+        } else {
+          throw e;
+        }
+      }
       // TODO this is a workaround for a bug in EWS, when create new Allday
       // event in Exchange then modify it in eXo, the event in Exchange will
       // have wrong start and end dates. By saving it again, it will be fixed.
-//      if (checkDates) {
-//        Appointment tmpAppointment = Appointment.bind(service, appointment.getId());
-//        if (!tmpAppointment.getStart().equals(appointment.getStart())) {
-//          if (LOG.isTraceEnabled()) {
-//            LOG.trace("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
-//          }
-//          updateOrCreateExchangeAppointment(username, service, event, exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, false);
-//          return false;
-//        }
-//      }
+      // if (checkDates) {
+      // Appointment tmpAppointment = Appointment.bind(service,
+      // appointment.getId());
+      // if (!tmpAppointment.getStart().equals(appointment.getStart())) {
+      // if (LOG.isTraceEnabled()) {
+      // LOG.trace("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
+      // }
+      // updateOrCreateExchangeAppointment(username, service, event,
+      // exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, false);
+      // return false;
+      // }
+      // }
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
     }
     if (eventsToUpdateModifiedTime != null) {
