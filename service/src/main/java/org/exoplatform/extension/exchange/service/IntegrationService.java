@@ -55,14 +55,13 @@ import org.exoplatform.web.security.codec.AbstractCodec;
 import org.exoplatform.web.security.codec.AbstractCodecBuilder;
 import org.exoplatform.web.security.security.TokenServiceInitializationException;
 import org.gatein.common.io.IOTools;
-import org.picocontainer.Startable;
 
 /**
  * 
  * @author Boubaker KHANFIR
  * 
  */
-public class IntegrationService implements Startable {
+public class IntegrationService {
 
   public static final String USER_EXCHANGE_SERVER_URL_ATTRIBUTE = "exchange.server.url";
   public static final String USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE = "exchange.server.domain";
@@ -75,6 +74,8 @@ public class IntegrationService implements Startable {
   private static final String USER_EXO_HANDLED_ATTRIBUTE = "exo.check.date";
   private static final Map<String, IntegrationService> instances = new HashMap<String, IntegrationService>();
 
+  private static AbstractCodec codec;
+
   private final String username;
   private final ExchangeService service;
   private final ExoStorageService exoStorageService;
@@ -84,7 +85,6 @@ public class IntegrationService implements Startable {
   private final CalendarService calendarService;
 
   private boolean synchIsCurrentlyRunning = false;
-  private AbstractCodec codec;
 
   public IntegrationService(OrganizationService organizationService, CalendarService calendarService, ExoStorageService exoStorageService, ExchangeStorageService exchangeStorageService,
       CorrespondenceService correspondenceService, ExchangeService service, String username) {
@@ -596,35 +596,6 @@ public class IntegrationService implements Startable {
 
   /**
    * 
-   * set attribute in current user profile
-   * 
-   * @param name
-   * @param value
-   * @throws Exception
-   */
-  public void setUserArrtibute(String name, String value) throws Exception {
-    if (USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
-      value = encodePassword(value);
-    }
-    setUserArrtibute(organizationService, username, name, value);
-  }
-
-  /**
-   * 
-   * @param name
-   * @return Value of the attribute from current user Profile
-   * @throws Exception
-   */
-  public String getUserArrtibute(String name) throws Exception {
-    String value = getUserArrtibute(organizationService, username, name);
-    if (value != null && USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
-      value = decodePassword(value);
-    }
-    return value;
-  }
-
-  /**
-   * 
    * @param organizationService
    * @param username
    * @param name
@@ -636,6 +607,9 @@ public class IntegrationService implements Startable {
       ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
     }
     try {
+      if (USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
+        value = encodePassword(value);
+      }
       UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
       userProfile.setAttribute(name, value);
       organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
@@ -660,25 +634,17 @@ public class IntegrationService implements Startable {
     }
     try {
       UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-      return userProfile.getAttribute(name);
+      String value = userProfile.getAttribute(name);
+      if (value != null && USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
+        value = decodePassword(value);
+      }
+      return value;
     } finally {
       if (organizationService instanceof ComponentRequestLifecycle) {
         ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
       }
     }
   }
-
-  @Override
-  public void start() {
-    try {
-      initCodec();
-    } catch (Exception e) {
-      this.codec = null;
-    }
-  }
-
-  @Override
-  public void stop() {}
 
   public ExchangeService getService() {
     return service;
@@ -851,7 +817,7 @@ public class IntegrationService implements Startable {
     return findResults.getItems();
   }
 
-  private void initCodec() throws Exception {
+  private static void initCodec() throws Exception {
     String builderType = PropertyManager.getProperty("gatein.codec.builderclass");
     Map<String, String> config = new HashMap<String, String>();
 
@@ -916,31 +882,33 @@ public class IntegrationService implements Startable {
     }
 
     try {
-      this.codec = Class.forName(builderType).asSubclass(AbstractCodecBuilder.class).newInstance().build(config);
+      codec = Class.forName(builderType).asSubclass(AbstractCodecBuilder.class).newInstance().build(config);
       LOG.info("Initialized CookieTokenService.codec using builder " + builderType);
     } catch (Exception e) {
       throw new TokenServiceInitializationException("Could not initialize CookieTokenService.codec.", e);
     }
   }
 
-  private String decodePassword(String password) {
-    if (codec != null) {
-      try {
-        password = codec.decode(password);
-      } catch (Exception e) {
-        LOG.warn("Error while decoding password, it will be used in plain text", e);
+  private static String decodePassword(String password) {
+    try {
+      if (codec == null) {
+        initCodec();
       }
+      password = codec.decode(password);
+    } catch (Exception e) {
+      LOG.warn("Error while decoding password, it will be used in plain text", e);
     }
     return password;
   }
 
-  private String encodePassword(String password) {
-    if (codec != null) {
-      try {
-        password = codec.encode(password);
-      } catch (Exception e) {
-        LOG.warn("Error while encoding password, it will be used in plain text", e);
+  private static String encodePassword(String password) {
+    try {
+      if (codec == null) {
+        initCodec();
       }
+      password = codec.encode(password);
+    } catch (Exception e) {
+      LOG.warn("Error while encoding password, it will be used in plain text", e);
     }
     return password;
   }
