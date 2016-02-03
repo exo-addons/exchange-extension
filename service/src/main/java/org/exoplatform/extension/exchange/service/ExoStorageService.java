@@ -28,6 +28,7 @@ import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
+import org.exoplatform.calendar.util.Constants;
 import org.exoplatform.commons.utils.ISO8601;
 import org.exoplatform.extension.exchange.listener.CalendarCreateUpdateAction;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
@@ -207,7 +208,7 @@ public class ExoStorageService implements Serializable {
       calendar.setCalendarOwner(username);
       calendar.setDataInit(false);
       calendar.setEditPermission(new String[] { "any read" });
-      calendar.setCalendarColor(Calendar.COLORS[(int) (Math.random() * Calendar.COLORS.length)]);
+      calendar.setCalendarColor(Constants.COLORS[(int) (Math.random() * Constants.COLORS.length)]);
 
       storage.saveUserCalendar(username, calendar, true);
 
