@@ -997,7 +997,7 @@ public class CalendarConverterService {
     Calendar cal1 = getInstanceOfCurrentCalendar(timeZone);
     Calendar cal2 = getInstanceOfCurrentCalendar(timeZone);
 
-    if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster)) {
+    if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster) && appointment.getIsAllDayEvent()) {
       cal1.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getRecurrence().getStartDate()).getTime());
     } else {
       cal1.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getStart()).getTime());
@@ -1194,16 +1194,10 @@ public class CalendarConverterService {
   }
 
   private static void setEventReminder(CalendarEvent event, Appointment appointment, String username) throws Exception {
-    List<Reminder> reminders = event.getReminders();
-    if (reminders != null) {
-      reminders.clear();
-    }
+    List<Reminder> reminders = new ArrayList<Reminder>();
+    event.setReminders(reminders);
     try {
       if (appointment.getIsReminderSet()) {
-        if (reminders == null) {
-          reminders = new ArrayList<Reminder>();
-          event.setReminders(reminders);
-        }
         Reminder reminder = new Reminder();
         reminder.setFromDateTime(appointment.getReminderDueBy());
         reminder.setAlarmBefore(appointment.getReminderMinutesBeforeStart());
