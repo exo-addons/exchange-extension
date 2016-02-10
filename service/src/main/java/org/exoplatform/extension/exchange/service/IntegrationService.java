@@ -611,6 +611,10 @@ public class IntegrationService {
         value = encodePassword(value);
       }
       UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
+      if (userProfile == null) {
+        userProfile = organizationService.getUserProfileHandler().createUserProfileInstance(username);
+        organizationService.getUserProfileHandler().saveUserProfile(userProfile, true);
+      }
       userProfile.setAttribute(name, value);
       organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
     } finally {
@@ -634,9 +638,12 @@ public class IntegrationService {
     }
     try {
       UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-      String value = userProfile.getAttribute(name);
-      if (value != null && USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
-        value = decodePassword(value);
+      String value = null;
+      if (userProfile != null) {
+        value = userProfile.getAttribute(name);
+        if (value != null && USER_EXCHANGE_PASSWORD_ATTRIBUTE.equals(name)) {
+          value = decodePassword(value);
+        }
       }
       return value;
     } finally {
