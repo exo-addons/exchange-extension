@@ -1,8 +1,8 @@
 exchange-extension
 ==================
 
-1.1.0-SNAPSHOT : version for eXoPlatform 4.2
-1.0.3-SNAPSHOT : version for eXoPlatform 4.1
+1.2 : version for eXoPlatform 4.3
+1.1 : version for eXoPlatform 4.2
 
 eXo Platform extension to synchronize exchange calendars with eXo Calendars
 
