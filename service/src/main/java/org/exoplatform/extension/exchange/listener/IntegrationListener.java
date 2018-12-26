@@ -1,7 +1,6 @@
 package org.exoplatform.extension.exchange.listener;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 
 import org.apache.commons.lang.StringUtils;
@@ -10,6 +9,7 @@ import org.picocontainer.Startable;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import org.exoplatform.calendar.service.CalendarService;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.xml.InitParams;
 import org.exoplatform.extension.exchange.service.*;
 import org.exoplatform.services.log.ExoLogger;
@@ -250,7 +250,11 @@ public class IntegrationListener implements Startable {
    * @param username
    */
   public void userLoggedOut(String username) {
-    closeTaskIfExists(username);
+    ConversationRegistry conversationRegistry = CommonsUtils.getService(ConversationRegistry.class);
+    List<StateKey> stateKeys = conversationRegistry.getStateKeys(username);
+    if (stateKeys == null || stateKeys.isEmpty()) {
+      closeTaskIfExists(username);
+    }
   }
 
   /**

@@ -4,6 +4,8 @@ import java.io.Serializable;
 import java.util.*;
 import java.util.function.Function;
 
+import org.apache.commons.lang3.StringUtils;
+
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
@@ -100,7 +102,7 @@ public class ExchangeStorageService implements Serializable {
     if (itemId != null) {
       try {
         appointment = Appointment.bind(service, ItemId.getItemIdFromString(itemId));
-        isNew = false;
+        isNew = appointment == null;
       } catch (ServiceResponseException e) {
         LOG.warn("Item was not bound, it was deleted or not yet created:" + event.getId(), e);
         correspondenceService.deleteCorrespondingId(username, event.getId());
@@ -137,10 +139,14 @@ public class ExchangeStorageService implements Serializable {
           || (event.getIsExceptionOccurrence() != null && event.getIsExceptionOccurrence())) {
         if (isNew) {
           String exchangeMasterId = correspondenceService.getCorrespondingId(username, exoMasterId);
-          Appointment tmpAppointment = getAppointmentOccurence(service, exchangeMasterId, event.getRecurrenceId());
-          if (tmpAppointment != null) {
-            isNew = false;
-          } else {
+          if (StringUtils.isNotBlank(exchangeMasterId)) {
+            appointment = getAppointmentOccurence(service, exchangeMasterId, event.getRecurrenceId());
+            if (appointment != null) {
+              correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
+              isNew = false;
+            }
+          }
+          if (isNew) {
             appointment = new Appointment(service);
           }
         }
@@ -392,7 +398,7 @@ public class ExchangeStorageService implements Serializable {
     try {
       item = Item.bind(service, itemId);
     } catch (ServiceResponseException e) {
-      LOG.warn("Can't get item identified by id: " + itemId.getUniqueId());
+      LOG.debug("Can't get item identified by id: " + itemId.getUniqueId());
     }
     return item;
   }

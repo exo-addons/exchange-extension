@@ -1,11 +1,12 @@
 package org.exoplatform.extension.exchange.listener;
 
-import java.util.GregorianCalendar;
+import java.util.*;
 
 import javax.jcr.Node;
 import javax.jcr.Property;
 
 import org.apache.commons.chain.Context;
+import org.apache.commons.lang.StringUtils;
 
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.Utils;
@@ -26,6 +27,9 @@ public class CalendarCreateUpdateAction implements Action {
 
   private final static ThreadLocal<Boolean> IGNORE_UPDATE         = new ThreadLocal<Boolean>();
 
+  private final static List<String>         PROPERTIES_WATCHED    = Arrays.asList(new String[] { Utils.EXO_PARTICIPANT_STATUS,
+      Utils.EXO_REPEAT_INTERVAL, Utils.EXO_REPEAT_FINISH_DATE, Utils.EXO_REPEAT_BYMONTHDAY, Utils.EXO_REPEAT_BYDAY });
+
   private static final String               EXO_DATETIME_PROPERTY = "exo:datetime";
 
   private static final Log                  LOG                   = ExoLogger.getLogger(CalendarCreateUpdateAction.class);
@@ -36,17 +40,19 @@ public class CalendarCreateUpdateAction implements Action {
     }
     Object object = context.get("currentItem");
     Node node = null;
+    Property property = null;
     if (object instanceof Node) {
       node = (Node) object;
     } else if (object instanceof Property) {
-      Property property = (Property) object;
+      property = (Property) object;
       node = property.getParent();
-      // This is to avoid making multiple update requests to exchange
-      if (!isNotLastPropertyToSet(node, property)) {
-        return false;
-      }
     }
     if (!isNodeValid(node)) {
+      return false;
+    }
+
+    // This is to avoid making multiple update requests to exchange
+    if (property != null && !isLastPropertyToSet(node, property)) {
       return false;
     }
 
@@ -67,15 +73,24 @@ public class CalendarCreateUpdateAction implements Action {
 
       IntegrationService integrationService = IntegrationService.getInstance(userId);
       if (integrationService == null) {
-        LOG.warn("No authenticated user was found while trying to create/update eXo Calendar event with id: '" + eventId
-            + "' for user: " + userId);
+        LOG.trace("No authenticated user was found while trying to create/update eXo Calendar event with id: '{}' for user: {}",
+                  eventId,
+                  userId);
         return false;
       } else if (MODIFIED_DATE.get() == null || MODIFIED_DATE.get() == 0) {
-        try {
-          modifyUpdateDate(node, System.currentTimeMillis());
-          integrationService.updateOrCreateExchangeCalendarEvent(node);
-        } catch (Exception e) {
-          LOG.warn("Error while create/update an Exchange item for eXo event: " + eventId, e);
+        String calendarId = node.hasProperty(Utils.EXO_CALENDAR_ID) ? node.getProperty(Utils.EXO_CALENDAR_ID).getString() : null;
+        if (integrationService.isCalendarSynchronizedWithExchange(calendarId)) {
+          boolean started = integrationService.setSynchronizationStarted();
+          if (started) {
+            try {
+              modifyUpdateDate(node, System.currentTimeMillis());
+              integrationService.updateOrCreateExchangeCalendarEvent(node);
+            } catch (Exception e) {
+              LOG.warn("Error while create/update an Exchange item for eXo event: " + eventId, e);
+            } finally {
+              integrationService.setSynchronizationStopped();
+            }
+          }
         }
       } else {
         modifyUpdateDate(node, MODIFIED_DATE.get());
@@ -106,16 +121,49 @@ public class CalendarCreateUpdateAction implements Action {
     }
   }
 
-  private boolean isNotLastPropertyToSet(Node node, Property property) throws Exception {
-    return (property.getName().equals(Utils.EXO_PARTICIPANT_STATUS)
-        && (!node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) || (node.hasProperty(Utils.EXO_REPEAT)
-            && node.getProperty(Utils.EXO_REPEAT).getString().equals(CalendarEvent.RP_NOREPEAT))));
+  private boolean isLastPropertyToSet(Node node, Property property) throws Exception {
+    String propertyName = property.getName();
+    if (!PROPERTIES_WATCHED.contains(propertyName)) {
+      return false;
+    }
+
+    if (!node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT)) {
+      // EXO_PARTICIPANT_STATUS is last property set
+      return true;
+    } else {
+      // Check if EXO_REPEAT_FINISH_DATE is the last property to set
+      Calendar dateRepeatTo = node.hasProperty(Utils.EXO_REPEAT_UNTIL) && node.getProperty(Utils.EXO_REPEAT_UNTIL) != null
+          && node.getProperty(Utils.EXO_REPEAT_UNTIL).getValue() != null ? node.getProperty(Utils.EXO_REPEAT_UNTIL).getDate()
+                                                                         : null;
+      if (dateRepeatTo != null) {
+        return propertyName.equals(Utils.EXO_REPEAT_FINISH_DATE);
+      }
+
+      // Check if EXO_REPEAT_FINISH_DATE is the last property to set
+      Long repeatCount = node.hasProperty(Utils.EXO_REPEAT_COUNT) && node.getProperty(Utils.EXO_REPEAT_COUNT) != null
+          && node.getProperty(Utils.EXO_REPEAT_COUNT).getValue() != null ? node.getProperty(Utils.EXO_REPEAT_COUNT).getLong()
+                                                                         : null;
+      if (repeatCount != null && repeatCount > 0) {
+        return propertyName.equals(Utils.EXO_REPEAT_FINISH_DATE);
+      }
+
+      // Check if EXO_REPEAT_BYDAY or EXO_REPEAT_BYMONTHDAY is the last property
+      // to set
+      String repeatType = node.hasProperty(Utils.EXO_REPEAT) && node.getProperty(Utils.EXO_REPEAT) != null
+          && node.getProperty(Utils.EXO_REPEAT).getValue() != null ? node.getProperty(Utils.EXO_REPEAT).getString() : null;
+      if (StringUtils.equals(repeatType, CalendarEvent.RP_WEEKLY)) {
+        return propertyName.equals(Utils.EXO_REPEAT_BYDAY);
+      } else if (StringUtils.equals(repeatType, CalendarEvent.RP_MONTHLY)) {
+        return propertyName.equals(Utils.EXO_REPEAT_BYMONTHDAY);
+      }
+
+      // EXO_REPEAT_INTERVAL is the last property set
+      return true;
+    }
   }
 
   private boolean isNodeValid(Node node) throws Exception {
-    return node != null && node.isNodeType("exo:calendarEvent")
-        && ((node.hasProperty(Utils.EXO_PARTICIPANT_STATUS) && !node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT))
-            || (node.isNodeType(Utils.EXO_REPEAT_CALENDAR_EVENT) && node.hasProperty(Utils.EXO_REPEAT_INTERVAL)));
+    return node != null && node.isNodeType(Utils.EXO_CALENDAR_EVENT);
   }
 
 }

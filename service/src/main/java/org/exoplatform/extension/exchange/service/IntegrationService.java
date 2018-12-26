@@ -9,6 +9,8 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.jcr.Node;
 
+import org.apache.commons.lang3.StringUtils;
+
 import org.exoplatform.calendar.service.Calendar;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
@@ -189,7 +191,7 @@ public class IntegrationService {
    * @throws Exception
    */
   public boolean isCalendarSynchronizedWithExchange(String id) throws Exception {
-    return correspondenceService.getCorrespondingId(username, id) != null;
+    return StringUtils.isNotBlank(id) && correspondenceService.getCorrespondingId(username, id) != null;
   }
 
   /**
@@ -435,16 +437,12 @@ public class IntegrationService {
     correspondenceService.deleteCorrespondingId(username, folderIdString);
   }
 
-  public synchronized void setSynchronizationStarted() {
-    synchIsCurrentlyRunning = true;
+  public synchronized boolean setSynchronizationStarted() {
+    return synchIsCurrentlyRunning ? false : (synchIsCurrentlyRunning = true);
   }
 
   public synchronized void setSynchronizationStopped() {
     synchIsCurrentlyRunning = false;
-  }
-
-  public synchronized boolean isSynchronizationStarted() {
-    return synchIsCurrentlyRunning;
   }
 
   private void deleteExoEventsOutOfSynchronization(FolderId folderId) throws Exception {

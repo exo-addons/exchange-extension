@@ -4,8 +4,6 @@ import javax.jcr.Node;
 
 import org.apache.commons.chain.Context;
 
-import com.ibm.icu.util.Calendar;
-
 import org.exoplatform.calendar.service.Utils;
 import org.exoplatform.extension.exchange.service.IntegrationService;
 import org.exoplatform.services.command.action.Action;
@@ -50,12 +48,13 @@ public class CalendarDeleteAction implements Action {
               // Test if synchronization task is started, if yes, don't take
               // care about modifications to not corrupt data by cocurrent
               // modifications.
-              if (!integrationService.isSynchronizationStarted()) {
-                integrationService.setSynchronizationStarted();
-                started = true;
-                integrationService.deleteExchangeCalendarEvent(eventId, calendarId);
-                integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
-                integrationService.setSynchronizationStopped();
+              started = integrationService.setSynchronizationStarted();
+              if (started) {
+                try {
+                  integrationService.deleteExchangeCalendarEvent(eventId, calendarId);
+                } finally {
+                  integrationService.setSynchronizationStopped();
+                }
               }
             }
           } catch (Exception e) {

@@ -157,9 +157,14 @@ public class ExchangeIntegrationTask extends Thread {
       Folder folder =
                     integrationService.getExchangeCalendar(FolderId.getFolderIdFromWellKnownFolderName(WellKnownFolderName.Calendar));
       if (folder != null) {
-        integrationService.setSynchronizationStarted();
-        calendarFolderIds = integrationService.getSynchronizedExchangeCalendars();
-        integrationService.setSynchronizationStopped();
+        if (!waitOtherTasks()) {
+          return;
+        }
+        try {
+          calendarFolderIds = integrationService.getSynchronizedExchangeCalendars();
+        } finally {
+          integrationService.setSynchronizationStopped();
+        }
       } else {
         throw new IllegalStateException("Error while authenticating user '" + username
             + "' to exchange, please make sure you are connected to the correct URL with correct credentials.");
@@ -169,10 +174,10 @@ public class ExchangeIntegrationTask extends Thread {
 
   @Override
   public void run() {
-    waitOtherTasks();
+    if (!waitOtherTasks()) {
+      return;
+    }
     try {
-      integrationService.setSynchronizationStarted();
-
       ConversationState.setCurrent(state);
 
       long newLastTimeCheck = System.currentTimeMillis();
@@ -223,7 +228,7 @@ public class ExchangeIntegrationTask extends Thread {
         LOG.trace(LOG_SEPARATOR);
       }
     } catch (Exception e) {
-      LOG.error("Error while synchronizing calndar entries.", e);
+      LOG.error("Error while synchronizing calendar entries.", e);
     } finally {
       integrationService.setSynchronizationStopped();
     }
@@ -270,9 +275,9 @@ public class ExchangeIntegrationTask extends Thread {
     return events;
   }
 
-  private void waitOtherTasks() {
+  private boolean waitOtherTasks() {
     int i = 0;
-    while (integrationService.isSynchronizationStarted() && i < 5) {
+    while (!integrationService.setSynchronizationStarted() && i < 5) {
       if (LOG.isTraceEnabled()) {
         LOG.trace("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'"
             + username + "'.");
@@ -284,6 +289,7 @@ public class ExchangeIntegrationTask extends Thread {
       }
       i++;
     }
+    return i < 5;
   }
 
   private void synchronizeByModificationDate(Date lastSyncDate, List<String> updatedExoEventIDs) throws Exception {
@@ -364,7 +370,7 @@ public class ExchangeIntegrationTask extends Thread {
       } catch (Exception e) {
         // Nothing to do, subscription may be timed out
         if (LOG.isDebugEnabled() || LOG.isTraceEnabled()) {
-          LOG.error("Error while unsubscribe, will renew it anyway.", e);
+          LOG.warn("Error while unsubscribe, will renew it anyway.");
         }
       }
     }
