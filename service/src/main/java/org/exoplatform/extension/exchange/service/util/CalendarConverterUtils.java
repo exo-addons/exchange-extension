@@ -30,6 +30,7 @@ import microsoft.exchange.webservices.data.property.complex.*;
 import microsoft.exchange.webservices.data.property.complex.recurrence.DayOfTheWeekCollection;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence.*;
+import microsoft.exchange.webservices.data.util.DateTimeUtils;
 
 /**
  * @author Boubaker Khanfir
@@ -980,30 +981,26 @@ public class CalendarConverterUtils {
     boolean isAllDay = isAllDayEvent(calendarEvent);
     appointment.setIsAllDayEvent(isAllDay);
 
-    Calendar calendar = Calendar.getInstance();
+    Date fromDateTime = calendarEvent.getFromDateTime();
     if (isAllDay) {
-      calendar.setTime(calendarEvent.getFromDateTime());
-      calendar.set(Calendar.HOUR_OF_DAY, 0);
-      calendar.set(Calendar.MINUTE, 0);
-      calendar.set(Calendar.SECOND, 0);
-      calendar.set(Calendar.MILLISECOND, 0);
-      calendar.add(Calendar.MILLISECOND, TIMEZONE_OFFSET_MILLIS);
-    } else {
-      calendar = getCalendarInstance(calendarEvent.getFromDateTime());
+      String dateString = new SimpleDateFormat("yyyy-MM-dd'T00:00:00.000Z'").format(fromDateTime);
+      fromDateTime = DateTimeUtils.convertDateTimeStringToDate(dateString);
+      Calendar calendar = Calendar.getInstance();
+      calendar.setTimeInMillis(fromDateTime.getTime() - TIMEZONE_OFFSET_MILLIS);
+      fromDateTime = calendar.getTime();
     }
-    appointment.setStart(calendar.getTime());
+    appointment.setStart(fromDateTime);
 
+    Date toDateTime = calendarEvent.getToDateTime();
     if (isAllDay) {
-      calendar.setTime(calendarEvent.getToDateTime());
-      calendar.set(Calendar.HOUR_OF_DAY, 0);
-      calendar.set(Calendar.MINUTE, 0);
-      calendar.set(Calendar.SECOND, 0);
-      calendar.set(Calendar.MILLISECOND, 0);
-      calendar.add(Calendar.MILLISECOND, TIMEZONE_OFFSET_MILLIS);
-    } else {
-      calendar = getCalendarInstance(calendarEvent.getToDateTime());
+      String dateString = new SimpleDateFormat("yyyy-MM-dd'T23:59:59.000Z'").format(toDateTime);
+      toDateTime = DateTimeUtils.convertDateTimeStringToDate(dateString);
+      Calendar calendar = Calendar.getInstance();
+      calendar.setTimeInMillis(toDateTime.getTime() - TIMEZONE_OFFSET_MILLIS);
+      calendar.add(Calendar.SECOND, 1);
+      toDateTime = calendar.getTime();
     }
-    appointment.setEnd(calendar.getTime());
+    appointment.setEnd(toDateTime);
     LOG.debug("APPOINTMENT - Set dates: {} to {}", appointment.getStart(), appointment.getEnd());
   }
 
