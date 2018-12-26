@@ -6,7 +6,7 @@
 	<artifactId>exchange-extension-parent</artifactId>
 	<version>1.2.x-SNAPSHOT</version>
   </parent>
-  <artifactId>exchange-resources</artifactId>
+  <artifactId>exchange-extension-resource</artifactId>
   <packaging>war</packaging>
   <name>eXo Platform - addons - Exchange extension - Resources Webapp</name>
   <build>

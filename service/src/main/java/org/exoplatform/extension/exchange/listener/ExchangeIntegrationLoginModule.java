@@ -6,21 +6,22 @@ import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.login.LoginException;
 
 import org.apache.commons.lang.StringUtils;
+
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.jaas.AbstractLoginModule;
 
 /**
- * 
  * @author Boubaker Khanfir
- * 
  */
 public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
 
-  private static final Log LOG = ExoLogger.getLogger(ExchangeIntegrationLoginModule.class);
+  private static final Log    LOG      = ExoLogger.getLogger(ExchangeIntegrationLoginModule.class);
 
   private IntegrationListener exchangeListenerService;
-  private String username = null;
+
+  private String              username = null;
 
   public ExchangeIntegrationLoginModule() {
     super();
@@ -58,7 +59,7 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
   @Override
   public boolean logout() throws LoginException {
     if (username != null) {
-      exchangeListenerService.userLoggedOut(username);
+      getExchangeListenerService().userLoggedOut(username);
     }
     return false;
   }
@@ -70,11 +71,7 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
 
   public IntegrationListener getExchangeListenerService() {
     if (exchangeListenerService == null) {
-      try {
-        this.exchangeListenerService = (IntegrationListener) getContainer().getComponentInstanceOfType(IntegrationListener.class);
-      } catch (Exception e) {
-        LOG.error(e);
-      }
+      this.exchangeListenerService = CommonsUtils.getService(IntegrationListener.class);
     }
     return exchangeListenerService;
   }

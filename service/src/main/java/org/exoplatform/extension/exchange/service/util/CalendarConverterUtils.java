@@ -1,93 +1,60 @@
 package org.exoplatform.extension.exchange.service.util;
 
 import java.io.ByteArrayInputStream;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.*;
 import java.util.Calendar;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.TimeZone;
-
-import microsoft.exchange.webservices.data.Appointment;
-import microsoft.exchange.webservices.data.AppointmentSchema;
-import microsoft.exchange.webservices.data.AppointmentType;
-import microsoft.exchange.webservices.data.Attachment;
-import microsoft.exchange.webservices.data.AttachmentCollection;
-import microsoft.exchange.webservices.data.Attendee;
-import microsoft.exchange.webservices.data.AttendeeCollection;
-import microsoft.exchange.webservices.data.BasePropertySet;
-import microsoft.exchange.webservices.data.BodyType;
-import microsoft.exchange.webservices.data.DayOfTheWeek;
-import microsoft.exchange.webservices.data.DayOfTheWeekCollection;
-import microsoft.exchange.webservices.data.DayOfTheWeekIndex;
-import microsoft.exchange.webservices.data.DeletedOccurrenceInfo;
-import microsoft.exchange.webservices.data.DeletedOccurrenceInfoCollection;
-import microsoft.exchange.webservices.data.FileAttachment;
-import microsoft.exchange.webservices.data.Importance;
-import microsoft.exchange.webservices.data.ItemId;
-import microsoft.exchange.webservices.data.LegacyFreeBusyStatus;
-import microsoft.exchange.webservices.data.MessageBody;
-import microsoft.exchange.webservices.data.Month;
-import microsoft.exchange.webservices.data.OccurrenceInfo;
-import microsoft.exchange.webservices.data.OccurrenceInfoCollection;
-import microsoft.exchange.webservices.data.PropertySet;
-import microsoft.exchange.webservices.data.Recurrence;
-import microsoft.exchange.webservices.data.Recurrence.DailyPattern;
-import microsoft.exchange.webservices.data.Recurrence.IntervalPattern;
-import microsoft.exchange.webservices.data.Recurrence.MonthlyPattern;
-import microsoft.exchange.webservices.data.Recurrence.RelativeMonthlyPattern;
-import microsoft.exchange.webservices.data.Recurrence.RelativeYearlyPattern;
-import microsoft.exchange.webservices.data.Recurrence.WeeklyPattern;
-import microsoft.exchange.webservices.data.Recurrence.YearlyPattern;
-import microsoft.exchange.webservices.data.Sensitivity;
-import microsoft.exchange.webservices.data.ServiceLocalException;
-import microsoft.exchange.webservices.data.ServiceObjectPropertyException;
-import microsoft.exchange.webservices.data.StringList;
-import microsoft.exchange.webservices.data.TimeZoneDefinition;
 
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang.StringUtils;
 import org.apache.tika.mime.MimeTypes;
-import org.exoplatform.calendar.service.CalendarEvent;
-import org.exoplatform.calendar.service.EventCategory;
-import org.exoplatform.calendar.service.Reminder;
+
+import org.exoplatform.calendar.service.*;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
-import org.exoplatform.calendar.service.impl.NewUserListener;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.extension.exchange.service.CorrespondenceService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.organization.Query;
-import org.exoplatform.services.organization.User;
-import org.exoplatform.services.organization.UserHandler;
+import org.exoplatform.services.organization.*;
+
+import microsoft.exchange.webservices.data.core.PropertySet;
+import microsoft.exchange.webservices.data.core.enumeration.property.*;
+import microsoft.exchange.webservices.data.core.enumeration.property.time.*;
+import microsoft.exchange.webservices.data.core.enumeration.service.calendar.AppointmentType;
+import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
+import microsoft.exchange.webservices.data.core.exception.service.local.ServiceObjectPropertyException;
+import microsoft.exchange.webservices.data.core.service.item.Appointment;
+import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
+import microsoft.exchange.webservices.data.property.complex.*;
+import microsoft.exchange.webservices.data.property.complex.recurrence.DayOfTheWeekCollection;
+import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
+import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence.*;
 
 /**
- * 
  * @author Boubaker Khanfir
- * 
  */
-public class CalendarConverterService {
+@SuppressWarnings("all")
+public class CalendarConverterUtils {
 
-  private final static Log LOG = ExoLogger.getLogger(CalendarConverterService.class);
+  private static final Log                LOG                           = ExoLogger.getLogger(CalendarConverterUtils.class);
 
-  public static final String EXCHANGE_CALENDAR_NAME_PREFIX = "EXCH";
-  public static final String EXCHANGE_CALENDAR_ID_PREFIX = "EXCH";
-  public static final String EXCHANGE_EVENT_ID_PREFIX = "ExcangeEvent";
+  public static final String              EXCHANGE_CALENDAR_NAME_PREFIX = "EXCH";
 
-  private final static SimpleDateFormat UTC_DATE_FORMAT = new SimpleDateFormat("dd MMM yyyy HH:mm:ss");
+  public static final String              EXCHANGE_CALENDAR_ID_PREFIX   = "EXCH";
 
-  public static final SimpleDateFormat RECURRENCE_ID_FORMAT = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
+  public static final String              EXCHANGE_EVENT_ID_PREFIX      = "ExcangeEvent";
+
+  public static final SimpleDateFormat    UTC_DATE_FORMAT               = new SimpleDateFormat("dd MMM yyyy HH:mm:ss");
+
+  public static final SimpleDateFormat    RECURRENCE_ID_FORMAT          = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
 
   // Reuse the object and save memory instead of instantiating this every call
-  private static final ThreadLocal<Query> queryThreadLocal = new ThreadLocal<Query>();
+  private static final ThreadLocal<Query> queryThreadLocal              = new ThreadLocal<>();
+
+  private CalendarConverterUtils() {
+  }
 
   /**
-   * 
    * Converts from Exchange Calendar Event to eXo Calendar Event.
    * 
    * @param event
@@ -95,10 +62,13 @@ public class CalendarConverterService {
    * @param username
    * @param storage
    * @param userHandler
-   * @param timeZone
    * @throws Exception
    */
-  public static void convertExchangeToExoEvent(CalendarEvent event, Appointment appointment, String username, JCRDataStorage storage, UserHandler userHandler, TimeZone timeZone) throws Exception {
+  public static void convertExchangeToExoEvent(CalendarEvent event,
+                                               Appointment appointment,
+                                               String username,
+                                               JCRDataStorage storage,
+                                               UserHandler userHandler) throws Exception {
     if (event.getId() == null || event.getId().isEmpty()) {
       event.setId(getEventId(appointment.getId().getUniqueId()));
     }
@@ -109,7 +79,7 @@ public class CalendarConverterService {
     event.setLocation(appointment.getLocation());
     event.setSummary(appointment.getSubject());
     setEventStatus(event, appointment);
-    setEventDates(event, appointment, timeZone);
+    setEventDates(event, appointment);
     setEventPriority(event, appointment);
     setEventCategory(event, appointment, username, storage);
     setEventParticipants(event, appointment, userHandler);
@@ -126,7 +96,6 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
    * Converts from Exchange Calendar Recurring Master Event to eXo Calendar
    * Event.
    * 
@@ -135,13 +104,15 @@ public class CalendarConverterService {
    * @param username
    * @param storage
    * @param userHandler
-   * @param timeZone
    * @throws Exception
    */
   @SuppressWarnings("deprecation")
-  public static void convertExchangeToExoMasterRecurringCalendarEvent(CalendarEvent event, Appointment appointment, String username, JCRDataStorage storage, UserHandler userHandler, TimeZone timeZone)
-      throws Exception {
-    convertExchangeToExoEvent(event, appointment, username, storage, userHandler, timeZone);
+  public static void convertExchangeToExoMasterRecurringCalendarEvent(CalendarEvent event,
+                                                                      Appointment appointment,
+                                                                      String username,
+                                                                      JCRDataStorage storage,
+                                                                      UserHandler userHandler) throws Exception {
+    convertExchangeToExoEvent(event, appointment, username, storage, userHandler);
     appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.Recurrence));
     Recurrence recurrence = appointment.getRecurrence();
     if (recurrence instanceof DailyPattern) {
@@ -227,7 +198,8 @@ public class CalendarConverterService {
         dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[6];
         break;
       default:
-        LOG.error("Uknown day of the week '" + ((RelativeMonthlyPattern) recurrence).getDayOfTheWeek() + "', for recurrence '" + appointment.getSubject() + "', Monday will be set.");
+        LOG.error("Uknown day of the week '" + ((RelativeMonthlyPattern) recurrence).getDayOfTheWeek() + "', for recurrence '"
+            + appointment.getSubject() + "', Monday will be set.");
         dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[0];
         break;
       }
@@ -269,8 +241,11 @@ public class CalendarConverterService {
         event.setRepeatInterval(((IntervalPattern) recurrence).getInterval());
       }
     }
-    if (recurrence.getEndDate() != null) {
-      event.setRepeatUntilDate(getExoDateFromExchangeFormat(recurrence.getEndDate()));
+    Date endDate = recurrence.getEndDate();
+    if (endDate != null) {
+      Calendar calendar = getCalendarInstance(endDate);
+      setEndOfDay(calendar);
+      event.setRepeatUntilDate(calendar.getTime());
     }
     if (recurrence.getNumberOfOccurrences() != null) {
       event.setRepeatCount(recurrence.getNumberOfOccurrences());
@@ -278,30 +253,37 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
    * Converts from Exchange Calendar Exceptional Occurence Event to eXo Calendar
    * Event and return the list of deleted and updated elements.
    * 
    * @param masterEvent
-   * @param updatedEvents
-   *          empty list that will be updated by modified occurences
-   * @param appointmentIds
+   * @param updatedEvents empty list that will be updated by modified occurences
+   * @param occurenceAppointments
    * @param masterAppointment
    * @param username
    * @param storage
    * @param userHandler
-   * @param timeZone
    * @return
    * @throws Exception
    */
-  public static List<CalendarEvent> convertExchangeToExoOccurenceEvent(CalendarEvent masterEvent, List<CalendarEvent> updatedEvents, List<String> appointmentIds, Appointment masterAppointment,
-      String username, JCRDataStorage storage, UserHandler userHandler, CorrespondenceService correspondenceService, TimeZone timeZone) throws Exception {
-    masterAppointment = Appointment.bind(masterAppointment.getService(), masterAppointment.getId(), new PropertySet(AppointmentSchema.ModifiedOccurrences));
+  public static List<CalendarEvent> convertExchangeToExoOccurenceEvent(CalendarEvent masterEvent,
+                                                                       List<CalendarEvent> updatedEvents,
+                                                                       List<Appointment> occurenceAppointments,
+                                                                       Appointment masterAppointment,
+                                                                       String username,
+                                                                       JCRDataStorage storage,
+                                                                       UserHandler userHandler,
+                                                                       CorrespondenceService correspondenceService) throws Exception {
+    masterAppointment = Appointment.bind(masterAppointment.getService(),
+                                         masterAppointment.getId(),
+                                         new PropertySet(AppointmentSchema.ModifiedOccurrences));
     {
       OccurrenceInfoCollection occurrenceInfoCollection = masterAppointment.getModifiedOccurrences();
       if (occurrenceInfoCollection != null && occurrenceInfoCollection.getCount() > 0) {
         for (OccurrenceInfo occurrenceInfo : occurrenceInfoCollection) {
-          Appointment occurenceAppointment = Appointment.bind(masterAppointment.getService(), occurrenceInfo.getItemId(), new PropertySet(BasePropertySet.FirstClassProperties));
+          Appointment occurenceAppointment = Appointment.bind(masterAppointment.getService(),
+                                                              occurrenceInfo.getItemId(),
+                                                              new PropertySet(BasePropertySet.FirstClassProperties));
 
           String exoId = correspondenceService.getCorrespondingId(username, occurenceAppointment.getId().getUniqueId());
           CalendarEvent tmpEvent = null;
@@ -309,43 +291,47 @@ public class CalendarConverterService {
             tmpEvent = storage.getEvent(username, exoId);
           }
           if (tmpEvent == null) {
-            tmpEvent = getOccurenceOfDate(username, storage, masterEvent, getExoDateFromExchangeFormat(occurrenceInfo.getOriginalStart()), timeZone);
+            tmpEvent = getOccurenceOfDate(username, storage, masterEvent, occurrenceInfo.getOriginalStart());
           }
 
           if (tmpEvent != null && verifyModifiedDatesConflict(tmpEvent, occurenceAppointment)) {
-            if (LOG.isTraceEnabled()) {
-              LOG.trace("Attempting to update eXo Occurent Event with Exchange Event, but modification date of eXo is after, ignore updating.");
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("CONFLICT: Attempting to update eXo Event with Exchange Event, but modification date of eXo is after, ignore updating.");
             }
             continue;
           }
           if (tmpEvent == null || tmpEvent.getIsExceptionOccurrence() == null || !tmpEvent.getIsExceptionOccurrence()) {
             tmpEvent = new CalendarEvent();
-            convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler, timeZone);
+            convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler);
             tmpEvent.setRecurrenceId(RECURRENCE_ID_FORMAT.format(tmpEvent.getFromDateTime()));
             tmpEvent.setRepeatType(CalendarEvent.RP_NOREPEAT);
             tmpEvent.setId(masterEvent.getId());
             tmpEvent.setCalendarId(masterEvent.getCalendarId());
-            if (LOG.isTraceEnabled()) {
-              LOG.trace("Create exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: " + tmpEvent.getRecurrenceId());
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("CREATE exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: "
+                  + tmpEvent.getRecurrenceId());
             }
           } else {
-            if (LOG.isTraceEnabled()) {
-              LOG.trace("Update exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: " + tmpEvent.getRecurrenceId());
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("UPDATE exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: "
+                  + tmpEvent.getRecurrenceId());
             }
-            convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler, timeZone);
+            convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler);
           }
           updatedEvents.add(tmpEvent);
-          appointmentIds.add(occurenceAppointment.getId().getUniqueId());
+          occurenceAppointments.add(occurenceAppointment);
         }
       }
     }
-    masterAppointment = Appointment.bind(masterAppointment.getService(), masterAppointment.getId(), new PropertySet(AppointmentSchema.DeletedOccurrences));
+    masterAppointment = Appointment.bind(masterAppointment.getService(),
+                                         masterAppointment.getId(),
+                                         new PropertySet(AppointmentSchema.DeletedOccurrences));
 
     List<CalendarEvent> calendarEvents = new ArrayList<CalendarEvent>();
     DeletedOccurrenceInfoCollection deletedOccurrenceInfoCollection = masterAppointment.getDeletedOccurrences();
     if (deletedOccurrenceInfoCollection != null && deletedOccurrenceInfoCollection.getCount() > 0) {
       for (DeletedOccurrenceInfo occurrenceInfo : deletedOccurrenceInfoCollection) {
-        CalendarEvent toDeleteEvent = getOccurenceOfDate(username, storage, masterEvent, getExoDateFromExchangeFormat(occurrenceInfo.getOriginalStart()), timeZone);
+        CalendarEvent toDeleteEvent = getOccurenceOfDate(username, storage, masterEvent, occurrenceInfo.getOriginalStart());
         if (toDeleteEvent == null) {
           continue;
         }
@@ -354,8 +340,10 @@ public class CalendarConverterService {
         Appointment appointment = null;
         try {
           appointment = Appointment.bind(masterAppointment.getService(), ItemId.getItemIdFromString(appId));
-        } catch (Exception e) {}
-        if (appointment == null || toDeleteEvent.getIsExceptionOccurrence() == null || !toDeleteEvent.getIsExceptionOccurrence()) {
+        } catch (Exception e) {
+        }
+        if (appointment == null || toDeleteEvent.getIsExceptionOccurrence() == null
+            || !toDeleteEvent.getIsExceptionOccurrence()) {
           calendarEvents.add(toDeleteEvent);
         }
       }
@@ -364,28 +352,22 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
-   * @param event
-   *          eXo Calendar event
-   * @param item
-   *          Exchange item
+   * @param event eXo Calendar event
+   * @param item Exchange item
    * @return
    * @throws Exception
    */
   @SuppressWarnings("deprecation")
-  public static boolean verifyModifiedDatesConflict(CalendarEvent event, Appointment item) throws Exception {
+  public static boolean verifyModifiedDatesConflict(CalendarEvent event, Appointment appointment) throws Exception {
     if (event.getLastUpdatedTime() == null) {
       return false;
-    } else if (item.getLastModifiedTime() == null) {
+    } else if (appointment.getLastModifiedTime() == null) {
       return true;
     }
-    Date eventModifDate = CalendarConverterService.convertDateToUTC(event.getLastUpdatedTime());
-    Date itemModifDate = item.getLastModifiedTime();
-    return eventModifDate.getTime() >= itemModifDate.getTime();
+    return event.getLastModified() > appointment.getLastModifiedTime().getTime();
   }
 
   /**
-   * 
    * Converts from Exchange Calendar Event to eXo Calendar Event.
    * 
    * @param calendarEvent
@@ -394,10 +376,12 @@ public class CalendarConverterService {
    * @param calendarService
    * @throws Exception
    */
-  public static void convertExoToExchangeEvent(Appointment appointment, CalendarEvent calendarEvent, String username, UserHandler userHandler, TimeZoneDefinition serverTimeZoneDefinition,
-      TimeZone userCalendarTimeZone) throws Exception {
+  public static void convertExoToExchangeEvent(Appointment appointment,
+                                               CalendarEvent calendarEvent,
+                                               String username,
+                                               UserHandler userHandler) throws Exception {
     setAppointmentStatus(appointment, calendarEvent);
-    setAppointmentDates(appointment, calendarEvent, serverTimeZoneDefinition, userCalendarTimeZone);
+    setAppointmentDates(appointment, calendarEvent);
     setAppointmentPriority(appointment, calendarEvent);
     setAppointmentCategory(appointment, calendarEvent);
     setAppointmentAttendees(appointment, calendarEvent, userHandler, username);
@@ -417,7 +401,6 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
    * Converts from Exchange Calendar Recurring Master Event to eXo Calendar
    * Event.
    * 
@@ -428,11 +411,13 @@ public class CalendarConverterService {
    * @return list of occurences to delete
    * @throws Exception
    */
-  public static List<Appointment> convertExoToExchangeMasterRecurringCalendarEvent(Appointment appointment, CalendarEvent event, String username, UserHandler userHandler,
-      TimeZoneDefinition serverTimeZoneDefinition, TimeZone userCalendarTimeZone) throws Exception {
+  public static List<Appointment> convertExoToExchangeMasterRecurringCalendarEvent(Appointment appointment,
+                                                                                   CalendarEvent event,
+                                                                                   String username,
+                                                                                   UserHandler userHandler) throws Exception {
     List<Appointment> toDeleteOccurences = null;
 
-    convertExoToExchangeEvent(appointment, event, username, userHandler, serverTimeZoneDefinition, userCalendarTimeZone);
+    convertExoToExchangeEvent(appointment, event, username, userHandler);
 
     String repeatType = event.getRepeatType();
     assert repeatType != null && !repeatType.equals(CalendarEvent.RP_NOREPEAT);
@@ -461,13 +446,19 @@ public class CalendarConverterService {
           daysOfTheWeek.add(DayOfTheWeek.Sunday);
         }
       }
-      recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), daysOfTheWeek.toArray(new DayOfTheWeek[0]));
+      recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(),
+                                                (int) event.getRepeatInterval(),
+                                                daysOfTheWeek.toArray(new DayOfTheWeek[0]));
     } else if (repeatType.equals(CalendarEvent.RP_MONTHLY)) {
-      if ((event.getRepeatByMonthDay() == null || event.getRepeatByMonthDay().length == 0) && (event.getRepeatByDay() == null || event.getRepeatByDay().length == 0)) {
-        throw new IllegalStateException("event '" + event.getSummary() + "' is repeated monthly but value of dayOfMonth is null.");
+      if ((event.getRepeatByMonthDay() == null || event.getRepeatByMonthDay().length == 0)
+          && (event.getRepeatByDay() == null || event.getRepeatByDay().length == 0)) {
+        throw new IllegalStateException("event '" + event.getSummary()
+            + "' is repeated monthly but value of dayOfMonth is null.");
       }
       if ((event.getRepeatByMonthDay() != null || event.getRepeatByMonthDay().length > 0)) {
-        recurrence = new Recurrence.MonthlyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), (int) event.getRepeatByMonthDay()[0]);
+        recurrence = new Recurrence.MonthlyPattern(event.getFromDateTime(),
+                                                   (int) event.getRepeatInterval(),
+                                                   (int) event.getRepeatByMonthDay()[0]);
       } else if ((event.getRepeatByDay() != null || event.getRepeatByDay().length > 0)) {
         String repeatByDay = event.getRepeatByDay()[0];
         int weekIndex = Integer.parseInt(repeatByDay.substring(0, 1));
@@ -516,7 +507,10 @@ public class CalendarConverterService {
           dayOfTheWeekIndex = DayOfTheWeekIndex.First;
           break;
         }
-        recurrence = new Recurrence.RelativeMonthlyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), dayOfTheWeek, dayOfTheWeekIndex);
+        recurrence = new Recurrence.RelativeMonthlyPattern(event.getFromDateTime(),
+                                                           (int) event.getRepeatInterval(),
+                                                           dayOfTheWeek,
+                                                           dayOfTheWeekIndex);
       }
     } else if (repeatType.equals(CalendarEvent.RP_YEARLY)) {
       Calendar tempCalendar = Calendar.getInstance();
@@ -534,7 +528,8 @@ public class CalendarConverterService {
     } else if (repeatType.equals(CalendarEvent.RP_WORKINGDAYS)) {
       recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.Weekday);
     } else if (repeatType.equals(CalendarEvent.RP_WEEKEND)) {
-      recurrence = new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.WeekendDay);
+      recurrence =
+                 new Recurrence.WeeklyPattern(event.getFromDateTime(), (int) event.getRepeatInterval(), DayOfTheWeek.WeekendDay);
     }
 
     recurrence.setStartDate(event.getFromDateTime());
@@ -550,7 +545,7 @@ public class CalendarConverterService {
     appointment.setRecurrence(recurrence);
 
     if (event.getExceptionIds() != null && event.getExceptionIds().size() > 0) {
-      toDeleteOccurences = calculateOccurences(username, appointment, event, userCalendarTimeZone);
+      toDeleteOccurences = calculateOccurences(username, appointment, event);
 
       int nbOccurences = recurrence.getNumberOfOccurrences() == null ? 0 : recurrence.getNumberOfOccurrences();
       int deletedAppointmentOccurences = 0;
@@ -558,7 +553,9 @@ public class CalendarConverterService {
         deletedAppointmentOccurences = appointment.getDeletedOccurrences().getCount();
       } catch (Exception e) {
         try {
-          appointment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(BasePropertySet.FirstClassProperties));
+          appointment = Appointment.bind(appointment.getService(),
+                                         appointment.getId(),
+                                         new PropertySet(BasePropertySet.FirstClassProperties));
           deletedAppointmentOccurences = appointment.getDeletedOccurrences().getCount();
         } catch (Exception e2) {
           deletedAppointmentOccurences = 0;
@@ -573,7 +570,6 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
    * Converts from Exchange Calendar Exceptional Occurence Event to eXo Calendar
    * Event.
    * 
@@ -585,9 +581,11 @@ public class CalendarConverterService {
    * @return
    * @throws Exception
    */
-  public static void convertExoToExchangeOccurenceEvent(Appointment occAppointment, CalendarEvent occEvent, String username, UserHandler userHandler, TimeZoneDefinition serverTimeZoneDefinition,
-      TimeZone userCalendarTimeZone) throws Exception {
-    convertExoToExchangeEvent(occAppointment, occEvent, username, userHandler, serverTimeZoneDefinition, userCalendarTimeZone);
+  public static void convertExoToExchangeOccurenceEvent(Appointment occAppointment,
+                                                        CalendarEvent occEvent,
+                                                        String username,
+                                                        UserHandler userHandler) throws Exception {
+    convertExoToExchangeEvent(occAppointment, occEvent, username, userHandler);
   }
 
   /**
@@ -601,7 +599,6 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
    * Converts Exchange Calendar Name to eXo Calendar Id by adding a prefix and
    * hash coding the original Id.
    * 
@@ -613,7 +610,6 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
    * Checks if Passed eXo Calendar Id becomes from the synchronization with
    * exchange, by testing if the prefix exists or not.
    * 
@@ -625,7 +621,6 @@ public class CalendarConverterService {
   }
 
   /**
-   * 
    * Checks if Passed eXo Calendar Id becomes from the synchronization with
    * exchange, by testing if the prefix exists or not.
    * 
@@ -662,37 +657,22 @@ public class CalendarConverterService {
     return isSameDate(date1, date2);
   }
 
-  public static boolean isAllDayEvent(CalendarEvent eventCalendar, TimeZone userCalendarTimeZone) {
-    Calendar cal1 = Calendar.getInstance(userCalendarTimeZone);
+  public static boolean isAllDayEvent(CalendarEvent eventCalendar) {
+    Calendar cal1 = Calendar.getInstance();
     cal1.setLenient(false);
-    Calendar cal2 = Calendar.getInstance(userCalendarTimeZone);
+    Calendar cal2 = Calendar.getInstance();
     cal2.setLenient(false);
 
     cal1.setTime(eventCalendar.getFromDateTime());
     cal2.setTime(eventCalendar.getToDateTime());
-    return (cal1.get(Calendar.HOUR_OF_DAY) == 0 && cal1.get(Calendar.MINUTE) == 0 && cal2.get(Calendar.HOUR_OF_DAY) == cal2.getActualMaximum(Calendar.HOUR_OF_DAY) && cal2.get(Calendar.MINUTE) == cal2.getActualMaximum(Calendar.MINUTE));
-  }
-
-  public static Date convertDateToUTC(Date date) throws ParseException {
-    UTC_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
-    String time = UTC_DATE_FORMAT.format(date);
-    UTC_DATE_FORMAT.setTimeZone(TimeZone.getDefault());
-    return UTC_DATE_FORMAT.parse(time);
-  }
-
-  public static Date getExoDateFromExchangeFormat(Date date) {
-    int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
-
-    Calendar calendar = Calendar.getInstance();
-    calendar.setTime(date);
-    calendar.add(Calendar.MINUTE, exchangeOffset);
-
-    return calendar.getTime();
+    return (cal1.get(Calendar.HOUR_OF_DAY) == 0 && cal1.get(Calendar.MINUTE) == 0
+        && cal2.get(Calendar.HOUR_OF_DAY) == cal2.getActualMaximum(Calendar.HOUR_OF_DAY)
+        && cal2.get(Calendar.MINUTE) == cal2.getActualMaximum(Calendar.MINUTE));
   }
 
   public static Appointment getAppointmentOccurence(Appointment masterAppointment, String recurrenceId) throws Exception {
     Appointment appointment = null;
-    Date occDate = CalendarConverterService.RECURRENCE_ID_FORMAT.parse(recurrenceId);
+    Date occDate = CalendarConverterUtils.RECURRENCE_ID_FORMAT.parse(recurrenceId);
     {
       Calendar calendar = Calendar.getInstance();
       calendar.setTime(occDate);
@@ -716,10 +696,16 @@ public class CalendarConverterService {
     while (continueSearch && (nbOccurences == null || i <= nbOccurences)) {
       Appointment tmpAppointment = null;
       try {
-        tmpAppointment = Appointment.bindToOccurrence(masterAppointment.getService(), masterAppointment.getId(), i, new PropertySet(AppointmentSchema.Start));
-        Date date = CalendarConverterService.getExoDateFromExchangeFormat(tmpAppointment.getStart());
-        if (CalendarConverterService.isSameDate(occDate, date)) {
-          appointment = Appointment.bindToOccurrence(masterAppointment.getService(), masterAppointment.getId(), i, new PropertySet(BasePropertySet.FirstClassProperties));
+        tmpAppointment = Appointment.bindToOccurrence(masterAppointment.getService(),
+                                                      masterAppointment.getId(),
+                                                      i,
+                                                      new PropertySet(AppointmentSchema.Start));
+        Date date = tmpAppointment.getStart();
+        if (CalendarConverterUtils.isSameDate(occDate, date)) {
+          appointment = Appointment.bindToOccurrence(masterAppointment.getService(),
+                                                     masterAppointment.getId(),
+                                                     i,
+                                                     new PropertySet(BasePropertySet.FirstClassProperties));
           continueSearch = false;
         }
         indexCalendar.setTime(date);
@@ -728,25 +714,18 @@ public class CalendarConverterService {
         indexCalendar.add(Calendar.DATE, 1);
       }
       i++;
-      if (continueSearch && (occDate.before(indexCalendar.getTime()) || (endDate != null && indexCalendar.getTime().after(endDate)))) {
+      if (continueSearch
+          && (occDate.before(indexCalendar.getTime()) || (endDate != null && indexCalendar.getTime().after(endDate)))) {
         continueSearch = false;
       }
     }
     return appointment;
   }
 
-  // private static Date getExchangeDateFromExchangeFormat(Date date) {
-  // int exchangeOffset = TimeZone.getDefault().getOffset(date.getTime()) /
-  // 60000;
-  //
-  // Calendar calendar = Calendar.getInstance();
-  // calendar.setTime(date);
-  // calendar.add(Calendar.MINUTE, -exchangeOffset);
-  //
-  // return calendar.getTime();
-  // }
-
-  public static CalendarEvent getOccurenceOfDate(String username, JCRDataStorage storage, CalendarEvent masterEvent, Date originalStart, TimeZone timeZone) throws Exception {
+  public static CalendarEvent getOccurenceOfDate(String username,
+                                                 JCRDataStorage storage,
+                                                 CalendarEvent masterEvent,
+                                                 Date originalStart) throws Exception {
     Date date = originalStart;
     String recurenceId = RECURRENCE_ID_FORMAT.format(date);
     List<CalendarEvent> exceptionEvents = storage.getExceptionEvents(username, masterEvent);
@@ -758,30 +737,36 @@ public class CalendarConverterService {
       }
     }
 
-    Calendar from = Calendar.getInstance(timeZone);
+    Calendar from = Calendar.getInstance();
     from.setTime(date);
     from.set(Calendar.HOUR_OF_DAY, 0);
     from.set(Calendar.MINUTE, 0);
     from.set(Calendar.SECOND, 0);
     from.set(Calendar.MILLISECOND, 0);
 
-    Calendar to = Calendar.getInstance(timeZone);
+    Calendar to = Calendar.getInstance();
     to.setTime(date);
-    to.set(Calendar.HOUR_OF_DAY, to.getActualMaximum(Calendar.HOUR_OF_DAY));
-    to.set(Calendar.MINUTE, to.getActualMaximum(Calendar.MINUTE));
-    to.set(Calendar.SECOND, to.getActualMaximum(Calendar.SECOND));
-    to.set(Calendar.MILLISECOND, to.getActualMaximum(Calendar.MILLISECOND));
+    setEndOfDay(to);
 
-    Map<String, CalendarEvent> map = storage.getOccurrenceEvents(masterEvent, from, to, timeZone.getID());
+    CalendarSetting calendarSetting = storage.getCalendarSetting(username);
+    Map<String, CalendarEvent> map = storage.getOccurrenceEvents(masterEvent, from, to, calendarSetting.getTimeZone());
     CalendarEvent occEvent = null;
     if (map != null && !map.isEmpty()) {
       if (map.size() == 1) {
         occEvent = map.values().iterator().next();
       } else {
-        LOG.error("Error while deleting from eXo an occurence already deleted from Exchange '" + masterEvent.getSummary() + "' in date: '" + date + "'");
+        LOG.error("Error while deleting from eXo an occurence already deleted from Exchange '" + masterEvent.getSummary()
+            + "' in date: '" + date + "'");
       }
     }
     return occEvent;
+  }
+
+  private static void setEndOfDay(Calendar to) {
+    to.set(Calendar.HOUR_OF_DAY, to.getActualMaximum(Calendar.HOUR_OF_DAY));
+    to.set(Calendar.MINUTE, to.getActualMaximum(Calendar.MINUTE));
+    to.set(Calendar.SECOND, to.getActualMaximum(Calendar.SECOND));
+    to.set(Calendar.MILLISECOND, to.getActualMaximum(Calendar.MILLISECOND));
   }
 
   private static void setAppointmentReminder(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
@@ -791,12 +776,14 @@ public class CalendarConverterService {
       for (Reminder reminder : reminders) {
         appointment.setIsReminderSet(true);
         appointment.setReminderMinutesBeforeStart((int) reminder.getAlarmBefore());
-        appointment.setReminderDueBy(convertToDefaultTimeZoneFormat(reminder.getFromDateTime()));
+        appointment.setReminderDueBy(reminder.getFromDateTime());
       }
     }
   }
 
-  private static List<Appointment> calculateOccurences(String username, Appointment masterAppointment, CalendarEvent event, TimeZone userCalendarTimeZone) throws Exception {
+  private static List<Appointment> calculateOccurences(String username,
+                                                       Appointment masterAppointment,
+                                                       CalendarEvent event) throws Exception {
     List<Appointment> toDeleteOccurence = new ArrayList<Appointment>();
     Collection<String> excludedRecurenceIds = event.getExceptionIds();
     if (excludedRecurenceIds != null) {
@@ -825,10 +812,15 @@ public class CalendarConverterService {
   }
 
   private static boolean isSameDate(java.util.Calendar date1, java.util.Calendar date2) {
-    return (date1.get(java.util.Calendar.DATE) == date2.get(java.util.Calendar.DATE) && date1.get(java.util.Calendar.MONTH) == date2.get(java.util.Calendar.MONTH) && date1.get(java.util.Calendar.YEAR) == date2.get(java.util.Calendar.YEAR));
+    return (date1.get(java.util.Calendar.DATE) == date2.get(java.util.Calendar.DATE)
+        && date1.get(java.util.Calendar.MONTH) == date2.get(java.util.Calendar.MONTH)
+        && date1.get(java.util.Calendar.YEAR) == date2.get(java.util.Calendar.YEAR));
   }
 
-  private static void setAppointmentAttendees(Appointment appointment, CalendarEvent calendarEvent, UserHandler userHandler, String username) throws ServiceLocalException {
+  private static void setAppointmentAttendees(Appointment appointment,
+                                              CalendarEvent calendarEvent,
+                                              UserHandler userHandler,
+                                              String username) throws ServiceLocalException {
     AttendeeCollection attendees = appointment.getRequiredAttendees();
     assert attendees != null;
     computeAttendies(userHandler, username, attendees, calendarEvent.getParticipant());
@@ -838,7 +830,10 @@ public class CalendarConverterService {
     computeAttendies(userHandler, username, attendees, calendarEvent.getInvitation());
   }
 
-  private static void computeAttendies(UserHandler userHandler, String username, AttendeeCollection attendees, String[] participants) {
+  private static void computeAttendies(UserHandler userHandler,
+                                       String username,
+                                       AttendeeCollection attendees,
+                                       String[] participants) {
     if (participants != null && participants.length > 0) {
       for (String partacipant : participants) {
         if (partacipant == null || partacipant.isEmpty() || partacipant.equals(username)) {
@@ -875,7 +870,9 @@ public class CalendarConverterService {
     return false;
   }
 
-  private static void setEventParticipants(CalendarEvent calendarEvent, Appointment appointment, UserHandler userHandler) throws ServiceLocalException {
+  private static void setEventParticipants(CalendarEvent calendarEvent,
+                                           Appointment appointment,
+                                           UserHandler userHandler) throws ServiceLocalException {
     Query query = queryThreadLocal.get();
     if (query == null) {
       query = new Query();
@@ -890,7 +887,10 @@ public class CalendarConverterService {
     }
   }
 
-  private static void addEventPartacipants(AttendeeCollection attendeeCollection, UserHandler userHandler, Query query, List<String> participants) throws ServiceLocalException {
+  private static void addEventPartacipants(AttendeeCollection attendeeCollection,
+                                           UserHandler userHandler,
+                                           Query query,
+                                           List<String> participants) throws ServiceLocalException {
     if (attendeeCollection != null) {
       for (Attendee attendee : attendeeCollection) {
         if (attendee.getAddress() != null && !attendee.getAddress().isEmpty()) {
@@ -936,7 +936,8 @@ public class CalendarConverterService {
   }
 
   private static void setAppointmentPriority(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
-    if (calendarEvent.getPriority() == null || calendarEvent.getPriority().equals(CalendarEvent.PRIORITY_NONE) || calendarEvent.getPriority().equals(CalendarEvent.PRIORITY_NORMAL)) {
+    if (calendarEvent.getPriority() == null || calendarEvent.getPriority().equals(CalendarEvent.PRIORITY_NONE)
+        || calendarEvent.getPriority().equals(CalendarEvent.PRIORITY_NORMAL)) {
       appointment.setImportance(Importance.Normal);
     } else if (calendarEvent.getPriority().equals(CalendarEvent.PRIORITY_LOW)) {
       appointment.setImportance(Importance.Low);
@@ -963,55 +964,54 @@ public class CalendarConverterService {
     }
   }
 
-  private static void setAppointmentDates(Appointment appointment, CalendarEvent calendarEvent, TimeZoneDefinition serverTimeZoneDefinition, TimeZone userCalendarTimeZone) throws Exception {
-    boolean isAllDay = isAllDayEvent(calendarEvent, userCalendarTimeZone);
+  private static void setAppointmentDates(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
+    boolean isAllDay = isAllDayEvent(calendarEvent);
     Calendar calendar = Calendar.getInstance();
 
     if (isAllDay) {
       calendar.setTime(calendarEvent.getFromDateTime());
-
       calendar.set(Calendar.HOUR_OF_DAY, 0);
       calendar.set(Calendar.MINUTE, 0);
       calendar.set(Calendar.SECOND, 0);
-      calendar.set(Calendar.MILLISECOND, 0);
+      calendar.set(Calendar.MILLISECOND, TimeZone.getDefault().getRawOffset());
     } else {
-      calendar.setTime(convertToDefaultTimeZoneFormat(calendarEvent.getFromDateTime()));
+      calendar = getCalendarInstance(calendarEvent.getFromDateTime());
     }
     appointment.setStart(calendar.getTime());
 
     if (isAllDay) {
       calendar.setTime(calendarEvent.getToDateTime());
-
       calendar.set(Calendar.HOUR_OF_DAY, 0);
       calendar.set(Calendar.MINUTE, 0);
       calendar.set(Calendar.SECOND, 0);
-      calendar.set(Calendar.MILLISECOND, 0);
+      calendar.set(Calendar.MILLISECOND, TimeZone.getDefault().getRawOffset());
     } else {
-      calendar.setTime(convertToDefaultTimeZoneFormat(calendarEvent.getToDateTime()));
+      calendar = getCalendarInstance(calendarEvent.getToDateTime());
     }
     appointment.setEnd(calendar.getTime());
     appointment.setIsAllDayEvent(isAllDay);
   }
 
-  private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment, TimeZone timeZone) throws ServiceLocalException {
-    Calendar cal1 = getInstanceOfCurrentCalendar(timeZone);
-    Calendar cal2 = getInstanceOfCurrentCalendar(timeZone);
+  private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
+    Calendar cal1 = null;
+    Calendar cal2 = getCalendarInstance(appointment.getEnd());
 
     if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster) && appointment.getIsAllDayEvent()) {
-      cal1.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getRecurrence().getStartDate()).getTime());
+      cal1 = getCalendarInstance(appointment.getRecurrence().getStartDate());
     } else {
-      cal1.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getStart()).getTime());
+      cal1 = getCalendarInstance(appointment.getStart());
     }
-
-    cal2.setTimeInMillis(getExoDateFromExchangeFormat(appointment.getEnd()).getTime());
 
     if (appointment.getIsAllDayEvent()) {
       cal1.set(Calendar.HOUR_OF_DAY, 0);
       cal1.set(Calendar.MINUTE, 0);
-      cal2.add(Calendar.MILLISECOND, -1);
+      cal1.set(Calendar.SECOND, 0);
+      cal1.set(Calendar.MILLISECOND, 0);
 
+      cal2.add(Calendar.MILLISECOND, -1);
       cal2.set(Calendar.HOUR_OF_DAY, cal2.getActualMaximum(Calendar.HOUR_OF_DAY));
       cal2.set(Calendar.MINUTE, cal2.getActualMaximum(Calendar.MINUTE));
+      cal2.set(Calendar.SECOND, cal2.getActualMaximum(Calendar.SECOND));
 
       calendarEvent.setFromDateTime(cal1.getTime());
       calendarEvent.setToDateTime(cal2.getTime());
@@ -1022,47 +1022,18 @@ public class CalendarConverterService {
 
   }
 
-  /**
-   * 
-   * @return return an instance of Calendar class which contains user's setting,
-   *         such as, time zone, first day of week.
-   */
-  public static Calendar getInstanceOfCurrentCalendar(TimeZone timeZone) {
-    Calendar calendar = Calendar.getInstance();
-    calendar.setLenient(false);
-    calendar.setTimeZone(timeZone);
-    return calendar;
-
-  }
-
-  private static Date convertToDefaultTimeZoneFormat(Date date) {
-    int originalOffset = TimeZone.getDefault().getOffset(date.getTime()) / 60000;
-
+  public static Calendar getCalendarInstance(Date date) {
     Calendar calendar = Calendar.getInstance();
     calendar.setTime(date);
-    calendar.add(Calendar.MINUTE, -originalOffset);
-
-    return calendar.getTime();
+    return calendar;
   }
-
-  // private static Date convertToUserTimeZoneFormat(Date date, TimeZone
-  // timeZone) {
-  // int originalOffset = TimeZone.getDefault().getOffset(date.getTime()) /
-  // 60000;
-  // int userTZOffset = timeZone.getRawOffset() / 60000;
-  //
-  // Calendar calendar = Calendar.getInstance();
-  // calendar.setTime(date);
-  // calendar.add(Calendar.MINUTE, originalOffset - userTZOffset);
-  //
-  // return calendar.getTime();
-  // }
 
   private static void setAppointmentCategory(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
     if (appointment.getCategories() != null) {
       appointment.getCategories().clearList();
     }
-    if (calendarEvent.getEventCategoryName() != null && !calendarEvent.getEventCategoryName().isEmpty() && !calendarEvent.getEventCategoryId().equals(NewUserListener.DEFAULT_EVENTCATEGORY_ID_ALL)) {
+    if (calendarEvent.getEventCategoryName() != null && !calendarEvent.getEventCategoryName().isEmpty()
+        && !calendarEvent.getEventCategoryId().equals(CalendarService.DEFAULT_EVENTCATEGORY_ID_ALL)) {
       if (appointment.getCategories() == null) {
         StringList stringList = new StringList();
         appointment.setCategories(stringList);
@@ -1073,7 +1044,10 @@ public class CalendarConverterService {
     }
   }
 
-  private static void setEventCategory(CalendarEvent calendarEvent, Appointment appointment, String username, JCRDataStorage storage) throws Exception {
+  private static void setEventCategory(CalendarEvent calendarEvent,
+                                       Appointment appointment,
+                                       String username,
+                                       JCRDataStorage storage) throws Exception {
     if (appointment.getCategories() != null && appointment.getCategories().getSize() > 0) {
       String categoryName = appointment.getCategories().getString(0);
       if (categoryName != null && !categoryName.isEmpty()) {
@@ -1089,9 +1063,10 @@ public class CalendarConverterService {
         calendarEvent.setEventCategoryName(category.getName());
       }
     } else {
-      EventCategory category = getEventCategoryByName(storage, username, NewUserListener.DEFAULT_EVENTCATEGORY_NAME_ALL);
+      EventCategory category = getEventCategoryByName(storage, username, CalendarService.DEFAULT_EVENTCATEGORY_NAME_ALL);
       if (category == null) {
-        LOG.warn("Default category (" + NewUserListener.DEFAULT_EVENTCATEGORY_NAME_ALL + ")of eXo Calendar is null for user: " + username + ".");
+        LOG.warn("Default category (" + CalendarService.DEFAULT_EVENTCATEGORY_NAME_ALL + ")of eXo Calendar is null for user: "
+            + username + ".");
       } else {
         calendarEvent.setEventCategoryId(category.getId());
         calendarEvent.setEventCategoryName(category.getName());
@@ -1113,16 +1088,19 @@ public class CalendarConverterService {
 
   private static void setEventAttachements(CalendarEvent calendarEvent, Appointment appointment) throws Exception {
     if (appointment.getHasAttachments()) {
-      Appointment appointmentWithAttachment = Appointment.bind(appointment.getService(), appointment.getId(), new PropertySet(AppointmentSchema.Attachments));
-      Iterator<Attachment> attachmentIterator = appointmentWithAttachment.getAttachments().iterator();
-      List<org.exoplatform.calendar.service.Attachment> attachments = new ArrayList<org.exoplatform.calendar.service.Attachment>();
-      while (attachmentIterator.hasNext()) {
-        Attachment attachment = attachmentIterator.next();
+      Appointment appointmentWithAttachment = Appointment.bind(appointment.getService(),
+                                                               appointment.getId(),
+                                                               new PropertySet(AppointmentSchema.Attachments));
+      AttachmentCollection attachmentCollection = appointmentWithAttachment.getAttachments();
+      List<org.exoplatform.calendar.service.Attachment> attachments =
+                                                                    new ArrayList<org.exoplatform.calendar.service.Attachment>();
+      for (microsoft.exchange.webservices.data.property.complex.Attachment attachment : attachmentCollection) {
         if (attachment instanceof FileAttachment) {
           FileAttachment fileAttachment = (FileAttachment) attachment;
           org.exoplatform.calendar.service.Attachment eXoAttachment = new org.exoplatform.calendar.service.Attachment();
           if (fileAttachment.getSize() == 0) {
-            LOG.warn("Attachment '" + fileAttachment.getName() + "' of Appoitment " + appointment.getSubject() + ", start date : " + appointment.getStart() + " is empty, ignore it.");
+            LOG.warn("Attachment '" + fileAttachment.getName() + "' of Appoitment " + appointment.getSubject() + ", start date : "
+                + appointment.getStart() + " is empty, ignore it.");
             continue;
           }
           String contentType = fileAttachment.getContentType();
@@ -1130,8 +1108,8 @@ public class CalendarConverterService {
             contentType = MimeTypes.OCTET_STREAM;
             // the mimetype of the attachment was not found
             if (LOG.isTraceEnabled()) {
-              LOG.warn("No mimetype was found for attachement  '" + fileAttachment.getName() + "' of Appoitment " + appointment.getSubject() + ", start date : " + appointment.getStart()
-                  + ". Use default: " + contentType);
+              LOG.warn("No mimetype was found for attachement  '" + fileAttachment.getName() + "' of Appoitment "
+                  + appointment.getSubject() + ", start date : " + appointment.getStart() + ". Use default: " + contentType);
             }
           }
           ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -1155,7 +1133,8 @@ public class CalendarConverterService {
   }
 
   private static void setAppointmentStatus(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
-    String status = (calendarEvent.getStatus() == null || calendarEvent.getStatus().isEmpty()) ? calendarEvent.getEventState() : calendarEvent.getStatus();
+    String status = (calendarEvent.getStatus() == null || calendarEvent.getStatus().isEmpty()) ? calendarEvent.getEventState()
+                                                                                               : calendarEvent.getStatus();
     if (status == null) {
       status = "";
     }
@@ -1217,7 +1196,9 @@ public class CalendarConverterService {
     }
   }
 
-  private static EventCategory getEventCategoryByName(JCRDataStorage storage, String username, String eventCategoryName) throws Exception {
+  private static EventCategory getEventCategoryByName(JCRDataStorage storage,
+                                                      String username,
+                                                      String eventCategoryName) throws Exception {
     for (EventCategory ev : storage.getEventCategories(username)) {
       if (ev.getName().equalsIgnoreCase(eventCategoryName)) {
         return ev;

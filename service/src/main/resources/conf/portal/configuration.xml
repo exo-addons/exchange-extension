@@ -94,5 +94,10 @@
 			<set-method>addListener</set-method>
 			<type>org.exoplatform.extension.exchange.listener.ExchangeLoginListener</type>
 		</component-plugin>
+		<component-plugin>
+			<name>exo.core.security.ConversationRegistry.unregister</name>
+			<set-method>addListener</set-method>
+			<type>org.exoplatform.extension.exchange.listener.ExchangeLoginListener</type>
+		</component-plugin>
 	</external-component-plugins>
 </configuration>

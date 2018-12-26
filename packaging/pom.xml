@@ -19,7 +19,7 @@
 		</dependency>
 		<dependency>
 			<groupId>${project.groupId}</groupId>
-			<artifactId>exchange-resources</artifactId>
+			<artifactId>exchange-extension-resource</artifactId>
 			<version>${project.version}</version>
 			<type>war</type>
 			<scope>provided</scope>
@@ -29,8 +29,8 @@
 			<artifactId>jcifs</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.exoplatform.thirdparty.microsoft.exchange</groupId>
-			<artifactId>exchange-ws-api</artifactId>
+      <groupId>com.microsoft.ews-java-api</groupId>
+      <artifactId>ews-java-api</artifactId>
 		</dependency>
 	</dependencies>
 	<build>

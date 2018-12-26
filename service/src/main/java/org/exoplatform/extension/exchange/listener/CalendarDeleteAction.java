@@ -3,6 +3,9 @@ package org.exoplatform.extension.exchange.listener;
 import javax.jcr.Node;
 
 import org.apache.commons.chain.Context;
+
+import com.ibm.icu.util.Calendar;
+
 import org.exoplatform.calendar.service.Utils;
 import org.exoplatform.extension.exchange.service.IntegrationService;
 import org.exoplatform.services.command.action.Action;
@@ -11,16 +14,13 @@ import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.IdentityConstants;
 
-import com.ibm.icu.util.Calendar;
-
 /**
- * 
  * @author Boubaker Khanfir
- * 
  */
+@SuppressWarnings("all")
 public class CalendarDeleteAction implements Action {
 
-  private final static Log LOG = ExoLogger.getLogger(CalendarDeleteAction.class);
+  private static final Log LOG = ExoLogger.getLogger(CalendarDeleteAction.class);
 
   public boolean execute(Context context) throws Exception {
     Node node = (Node) context.get("currentItem");
@@ -38,7 +38,8 @@ public class CalendarDeleteAction implements Action {
         IntegrationService integrationService = IntegrationService.getInstance(userId);
         if (integrationService == null) {
           if (LOG.isTraceEnabled()) {
-            LOG.info("User '" + state.getIdentity().getUserId() + "' has no Exchange service, event will not be deleted from Exchange: eventId=" + eventId);
+            LOG.info("User '" + (state == null || state.getIdentity() == null ? "Anonymous" : state.getIdentity().getUserId())
+                + "' has no Exchange service, event will not be deleted from Exchange: eventId=" + eventId);
           }
           return false;
         } else {
@@ -52,18 +53,13 @@ public class CalendarDeleteAction implements Action {
               if (!integrationService.isSynchronizationStarted()) {
                 integrationService.setSynchronizationStarted();
                 started = true;
-                if (integrationService.getUserExoLastCheckDate() != null) {
-                  integrationService.deleteExchangeCalendarEvent(eventId, calendarId);
-                  integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
-                }
+                integrationService.deleteExchangeCalendarEvent(eventId, calendarId);
+                integrationService.setUserExoLastCheckDate(Calendar.getInstance().getTime().getTime());
                 integrationService.setSynchronizationStopped();
               }
             }
           } catch (Exception e) {
             LOG.error("Error while deleting Exchange event: " + eventId, e);
-            // Integration is out of sync, so disable auto synchronization
-            // until the scheduled job runs and try to fix this
-            integrationService.setUserExoLastCheckDate(0);
           } finally {
             // Set synchronization as finished if it was started here.
             if (started) {

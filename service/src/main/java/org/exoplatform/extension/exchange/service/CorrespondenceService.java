@@ -1,21 +1,15 @@
 package org.exoplatform.extension.exchange.service;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.io.*;
+import java.util.*;
 
 import javax.jcr.Node;
 import javax.jcr.Session;
 
 import org.apache.commons.io.output.ByteArrayOutputStream;
+
 import org.exoplatform.calendar.service.Utils;
-import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
+import org.exoplatform.extension.exchange.service.util.CalendarConverterUtils;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.jcr.ext.hierarchy.NodeHierarchyCreator;
@@ -23,17 +17,18 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
 public class CorrespondenceService implements Serializable {
-  private static final long serialVersionUID = 4155183714826625091L;
+  private static final long                serialVersionUID   = 4155183714826625091L;
 
-  private final static Log LOG = ExoLogger.getLogger(CorrespondenceService.class);
+  private static final Log                 LOG                = ExoLogger.getLogger(CorrespondenceService.class);
 
-  private static final String EXCHANGE_NODE_NAME = "calendar-exchange-extension";
+  private static final String              EXCHANGE_NODE_NAME = "calendar-exchange-extension";
 
   // Map of userId, correspondence exchange and eXo Ids
-  private Map<String, Properties> propertiesMap = new HashMap<String, Properties>();
+  private Map<String, Properties>          propertiesMap      = new HashMap<>();
 
-  private NodeHierarchyCreator hierarchyCreator;
-  private SessionProviderService providerService;
+  private transient NodeHierarchyCreator   hierarchyCreator;
+
+  private transient SessionProviderService providerService;
 
   public CorrespondenceService(NodeHierarchyCreator hierarchyCreator, SessionProviderService providerService) {
     this.hierarchyCreator = hierarchyCreator;
@@ -41,7 +36,6 @@ public class CorrespondenceService implements Serializable {
   }
 
   /**
-   * 
    * Gets Id of exchange from eXo Calendar or Event Id and vice versa
    * 
    * @param username
@@ -51,14 +45,10 @@ public class CorrespondenceService implements Serializable {
    */
   public String getCorrespondingId(String username, String id) throws Exception {
     Properties properties = loadCorrespondenceProperties(username);
-    if (properties != null) {
-      return properties.getProperty(id);
-    }
-    return null;
+    return properties.getProperty(id);
   }
 
   /**
-   * 
    * Sets Correspondence between IDs
    * 
    * @param username
@@ -84,7 +74,6 @@ public class CorrespondenceService implements Serializable {
   }
 
   /**
-   * 
    * delete Correspondence between IDs
    * 
    * @param username
@@ -111,12 +100,12 @@ public class CorrespondenceService implements Serializable {
 
   protected List<String> getSynchronizedExchangeFolderIds(String username) throws Exception {
     Properties properties = loadCorrespondenceProperties(username);
-    List<String> folderIds = new ArrayList<String>();
+    List<String> folderIds = new ArrayList<>();
     @SuppressWarnings("unchecked")
     Enumeration<String> enumeration = (Enumeration<String>) properties.propertyNames();
     while (enumeration.hasMoreElements()) {
-      String name = (String) enumeration.nextElement();
-      if (CalendarConverterService.isExchangeCalendarId(name)) {
+      String name = enumeration.nextElement();
+      if (CalendarConverterUtils.isExchangeCalendarId(name)) {
         folderIds.add(properties.getProperty(name));
       }
     }

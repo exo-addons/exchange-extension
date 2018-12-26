@@ -12,17 +12,18 @@
 			<outputDirectory>lib</outputDirectory>
 			<outputFileNameMapping>${artifact.artifactId}.${artifact.extension}</outputFileNameMapping>
 			<includes>
-				<include>org.exoplatform.thirdparty.microsoft.exchange:exchange-ws-api:jar</include>
-				<include>${project.groupId}:exchange-extension-*:jar</include>
+        <include>${project.groupId}:exchange-extension-service:jar</include>
+<!-- FORKED AND DISABLED For now -->
+<!-- 				<include>com.microsoft.ews-java-api:ews-java-api:jar</include> -->
 				<include>jcifs:jcifs:jar</include>
 			</includes>
 			<scope>provided</scope>
 		</dependencySet>
 		<dependencySet>
 			<outputDirectory>webapps</outputDirectory>
-			<outputFileNameMapping>${artifact.artifactId}.${artifact.extension}</outputFileNameMapping>
+			<outputFileNameMapping>exchange-resources.war</outputFileNameMapping>
 			<includes>
-				<include>${project.groupId}:exchange-resources:war</include>
+				<include>${project.groupId}:exchange-extension-resource:war</include>
 			</includes>
 			<scope>provided</scope>
 		</dependencySet>
@@ -30,7 +31,7 @@
 	<fileSets>
 		<fileSet>
 			<includes>
-				<include>lib/*</include>
+				<include>lib/*.jar</include>
 			</includes>
 			<directory>src/main/assemblies</directory>
 			<outputDirectory></outputDirectory>

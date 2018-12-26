@@ -1,51 +1,46 @@
 package org.exoplatform.extension.exchange.service;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.TimeZone;
-
-import microsoft.exchange.webservices.data.Appointment;
-import microsoft.exchange.webservices.data.AppointmentSchema;
-import microsoft.exchange.webservices.data.BasePropertySet;
-import microsoft.exchange.webservices.data.CalendarFolder;
-import microsoft.exchange.webservices.data.ConflictResolutionMode;
-import microsoft.exchange.webservices.data.DeleteMode;
-import microsoft.exchange.webservices.data.ExchangeService;
-import microsoft.exchange.webservices.data.FindFoldersResults;
-import microsoft.exchange.webservices.data.Folder;
-import microsoft.exchange.webservices.data.FolderId;
-import microsoft.exchange.webservices.data.FolderView;
-import microsoft.exchange.webservices.data.Item;
-import microsoft.exchange.webservices.data.ItemId;
-import microsoft.exchange.webservices.data.PropertySet;
-import microsoft.exchange.webservices.data.SendInvitationsMode;
-import microsoft.exchange.webservices.data.SendInvitationsOrCancellationsMode;
-import microsoft.exchange.webservices.data.ServiceResponseException;
-import microsoft.exchange.webservices.data.TimeZoneDefinition;
-import microsoft.exchange.webservices.data.WellKnownFolderName;
+import java.util.*;
+import java.util.function.Function;
 
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
 import org.exoplatform.container.PortalContainer;
-import org.exoplatform.extension.exchange.service.util.CalendarConverterService;
+import org.exoplatform.extension.exchange.service.util.CalendarConverterUtils;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.OrganizationService;
 
+import microsoft.exchange.webservices.data.core.ExchangeService;
+import microsoft.exchange.webservices.data.core.PropertySet;
+import microsoft.exchange.webservices.data.core.enumeration.property.BasePropertySet;
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.enumeration.service.*;
+import microsoft.exchange.webservices.data.core.exception.service.local.ServiceObjectPropertyException;
+import microsoft.exchange.webservices.data.core.exception.service.remote.ServiceResponseException;
+import microsoft.exchange.webservices.data.core.service.folder.CalendarFolder;
+import microsoft.exchange.webservices.data.core.service.folder.Folder;
+import microsoft.exchange.webservices.data.core.service.item.Appointment;
+import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
+import microsoft.exchange.webservices.data.property.complex.FolderId;
+import microsoft.exchange.webservices.data.property.complex.ItemId;
+import microsoft.exchange.webservices.data.search.FindFoldersResults;
+import microsoft.exchange.webservices.data.search.FolderView;
+
 /**
- * 
  * @author Boubaker Khanfir
- * 
  */
+@SuppressWarnings("all")
 public class ExchangeStorageService implements Serializable {
-  private static final long serialVersionUID = 6348129698208975430L;
+  private static final long     serialVersionUID = 6348129698208975430L;
 
-  private final static Log LOG = ExoLogger.getLogger(ExchangeStorageService.class);
+  private static final Log      LOG              = ExoLogger.getLogger(ExchangeStorageService.class);
 
-  private OrganizationService organizationService;
+  private OrganizationService   organizationService;
+
   private CorrespondenceService correspondenceService;
 
   public ExchangeStorageService(OrganizationService organizationService, CorrespondenceService correspondenceService) {
@@ -54,7 +49,6 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * 
    * Gets list of personnal Exchange Calendars.
    * 
    * @return list of FolderId
@@ -76,28 +70,27 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * 
    * @param username
    * @param service
    * @param event
    * @param exoMasterId
-   * @param userCalendarTimeZone
    * @return true if the CalenarEvent have to be deleted
    * @throws Exception
    */
-  public boolean updateOrCreateExchangeAppointment(String username, ExchangeService service, CalendarEvent event, String exoMasterId, TimeZone userCalendarTimeZone,
-      List<CalendarEvent> eventsToUpdateModifiedTime) throws Exception {
-    return updateOrCreateExchangeAppointment(username, service, event, exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, true);
-  }
+  public boolean updateOrCreateExchangeAppointment(String username,
+                                                   ExchangeService service,
+                                                   CalendarEvent event,
+                                                   String exoMasterId,
+                                                   Function<Appointment, Boolean> appointmentSavedCallback) throws Exception {
 
-  private boolean updateOrCreateExchangeAppointment(String username, ExchangeService service, CalendarEvent event, String exoMasterId, TimeZone userCalendarTimeZone,
-      List<CalendarEvent> eventsToUpdateModifiedTime, boolean checkDates) throws Exception {
     if (event == null) {
       return false;
     }
     String folderIdString = correspondenceService.getCorrespondingId(username, event.getCalendarId());
     if (folderIdString == null || folderIdString.isEmpty()) {
-      LOG.trace("eXo Calendar with id '" + event.getCalendarId() + "' is not synhronized with Exchange, ignore Event:" + event.getSummary());
+      LOG.trace("eXo Calendar with id '{}' is not synhronized with Exchange, ignore Event: {}",
+                event.getCalendarId(),
+                event.getSummary());
       return false;
     }
 
@@ -109,63 +102,88 @@ public class ExchangeStorageService implements Serializable {
         appointment = Appointment.bind(service, ItemId.getItemIdFromString(itemId));
         isNew = false;
       } catch (ServiceResponseException e) {
-        if (LOG.isTraceEnabled()) {
-          LOG.trace("Item was not bound, it was deleted or not yet created:" + event.getId());
-        }
+        LOG.warn("Item was not bound, it was deleted or not yet created:" + event.getId(), e);
         correspondenceService.deleteCorrespondingId(username, event.getId());
       }
     }
 
-    if (event.getRecurrenceId() == null && (event.getRepeatType() == null || event.getRepeatType().equals(CalendarEvent.RP_NOREPEAT))) {
+    if (!isNew && appointment.getLastModifiedTime() != null
+        && appointment.getLastModifiedTime().getTime() == event.getLastModified()) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("IGNORE updating appointment '{}' because its modified date is same as event modified date",
+                  event.getSummary());
+      }
+      return false;
+    }
+
+    if (event.getRecurrenceId() == null
+        && (event.getRepeatType() == null || event.getRepeatType().equals(CalendarEvent.RP_NOREPEAT))) {
       if (isNew) {
         // Checks if this event was already in Exchange, if it's the case, it
         // means that the item was not found because the user has removed it
         // from
         // Exchange
-        if (CalendarConverterService.isExchangeEventId(event.getId())) {
+        if (CalendarConverterUtils.isExchangeEventId(event.getId())) {
           LOG.error("Conflict in modification, inconsistant data, the event was deleted in Exchange but seems always in eXo, the event will be deleted from Exchange.");
           deleteAppointmentByExoEventId(username, service, event.getId(), event.getCalendarId());
           return false;
         }
         appointment = new Appointment(service);
       }
-      CalendarConverterService.convertExoToExchangeEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+
+      CalendarConverterUtils.convertExoToExchangeEvent(appointment, event, username, organizationService.getUserHandler());
     } else {
-      if ((event.getRecurrenceId() != null && !event.getRecurrenceId().isEmpty()) || (event.getIsExceptionOccurrence() != null && event.getIsExceptionOccurrence())) {
+      if ((event.getRecurrenceId() != null && !event.getRecurrenceId().isEmpty())
+          || (event.getIsExceptionOccurrence() != null && event.getIsExceptionOccurrence())) {
         if (isNew) {
           String exchangeMasterId = correspondenceService.getCorrespondingId(username, exoMasterId);
           Appointment tmpAppointment = getAppointmentOccurence(service, exchangeMasterId, event.getRecurrenceId());
           if (tmpAppointment != null) {
-            appointment = tmpAppointment;
             isNew = false;
           } else {
             appointment = new Appointment(service);
           }
         }
-        CalendarConverterService.convertExoToExchangeOccurenceEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+
+        CalendarConverterUtils.convertExoToExchangeOccurenceEvent(appointment,
+                                                                  event,
+                                                                  username,
+                                                                  organizationService.getUserHandler());
       } else {
         if (isNew) {
           // Checks if this event was already in Exchange, if it's the case, it
           // means that the item was not found because the user has removed it
           // from Exchange
-          if (CalendarConverterService.isExchangeEventId(event.getId())) {
+          if (CalendarConverterUtils.isExchangeEventId(event.getId())) {
             LOG.error("Conflict in modification, inconsistant data, the event was deleted in Exchange but seems always in eXo, the event will be deleted from Exchange.");
             deleteAppointmentByExoEventId(username, service, event.getId(), event.getCalendarId());
             return false;
           }
           appointment = new Appointment(service);
         }
-        List<Appointment> toDeleteOccurences = CalendarConverterService.convertExoToExchangeMasterRecurringCalendarEvent(appointment, event, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
+        List<Appointment> toDeleteOccurences =
+                                             CalendarConverterUtils.convertExoToExchangeMasterRecurringCalendarEvent(appointment,
+                                                                                                                     event,
+                                                                                                                     username,
+                                                                                                                     organizationService.getUserHandler());
 
         if (toDeleteOccurences != null && !toDeleteOccurences.isEmpty()) {
           for (Appointment occAppointment : toDeleteOccurences) {
 
-            CalendarServiceImpl calendarService = (CalendarServiceImpl) PortalContainer.getInstance().getComponentInstanceOfType(CalendarService.class);
-            CalendarEvent tmpEvent = CalendarConverterService.getOccurenceOfDate(username, calendarService.getDataStorage(), event, CalendarConverterService.getExoDateFromExchangeFormat(occAppointment.getOriginalStart()), userCalendarTimeZone);
+            CalendarServiceImpl calendarService =
+                                                (CalendarServiceImpl) PortalContainer.getInstance()
+                                                                                     .getComponentInstanceOfType(CalendarService.class);
+            CalendarEvent tmpEvent = CalendarConverterUtils.getOccurenceOfDate(username,
+                                                                               calendarService.getDataStorage(),
+                                                                               event,
+                                                                               occAppointment.getOriginalStart());
             if (tmpEvent != null) {
-              CalendarConverterService.convertExoToExchangeOccurenceEvent(occAppointment, tmpEvent, username, organizationService.getUserHandler(), getTimeZoneDefinition(service, userCalendarTimeZone), userCalendarTimeZone);
-              if (LOG.isTraceEnabled()) {
-                LOG.trace("Create Exchange Exceptional Occurence Appointment: " + tmpEvent.getSummary());
+              CalendarConverterUtils.convertExoToExchangeOccurenceEvent(occAppointment,
+                                                                        tmpEvent,
+                                                                        username,
+                                                                        organizationService.getUserHandler());
+              if (LOG.isDebugEnabled()) {
+                LOG.debug("CREATE Exchange Exceptional Occurence Appointment: " + tmpEvent.getSummary());
               }
               try {
                 occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
@@ -180,10 +198,7 @@ public class ExchangeStorageService implements Serializable {
                 }
               }
               correspondenceService.setCorrespondingId(username, tmpEvent.getId(), occAppointment.getId().getUniqueId());
-              if (eventsToUpdateModifiedTime != null) {
-                eventsToUpdateModifiedTime.add(event);
-              }
-
+              appointmentSavedCallback.apply(occAppointment);
               continue;
             }
             // Verify if deleted occurences is an exception existing occurence
@@ -197,8 +212,8 @@ public class ExchangeStorageService implements Serializable {
       }
     }
     if (isNew) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Create Exchange Appointment: " + event.getSummary());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("CREATE Exchange Appointment: " + event.getSummary());
       }
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       try {
@@ -214,9 +229,16 @@ public class ExchangeStorageService implements Serializable {
         }
       }
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
+      appointmentSavedCallback.apply(appointment);
     } else {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Update Exchange Appointment: " + event.getSummary());
+      if (getLastModifiedDate(appointment).getTime() == event.getLastModified()) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("IGNORE UPDATE Exchange Appointment '{}' because its modified date is the same as eXo Event",
+                    event.getSummary());
+        }
+        return false;
+      } else if (LOG.isDebugEnabled()) {
+        LOG.debug("UPDATE Exchange Appointment: " + event.getSummary());
       }
       try {
         appointment.update(ConflictResolutionMode.AlwaysOverwrite);
@@ -230,38 +252,23 @@ public class ExchangeStorageService implements Serializable {
           throw e;
         }
       }
-      // TODO this is a workaround for a bug in EWS, when create new Allday
-      // event in Exchange then modify it in eXo, the event in Exchange will
-      // have wrong start and end dates. By saving it again, it will be fixed.
-      // if (checkDates) {
-      // Appointment tmpAppointment = Appointment.bind(service,
-      // appointment.getId());
-      // if (!tmpAppointment.getStart().equals(appointment.getStart())) {
-      // if (LOG.isTraceEnabled()) {
-      // LOG.trace("Start date of saved appointement and appointement published aren't the same, EWS seems to have a bug.");
-      // }
-      // updateOrCreateExchangeAppointment(username, service, event,
-      // exoMasterId, userCalendarTimeZone, eventsToUpdateModifiedTime, false);
-      // return false;
-      // }
-      // }
       correspondenceService.setCorrespondingId(username, event.getId(), appointment.getId().getUniqueId());
-    }
-    if (eventsToUpdateModifiedTime != null) {
-      eventsToUpdateModifiedTime.add(event);
+      appointmentSavedCallback.apply(appointment);
     }
     return false;
   }
 
   /**
-   * 
    * @param username
    * @param service
    * @param eventId
    * @param calendarId
    * @throws Exception
    */
-  public void deleteAppointmentByExoEventId(String username, ExchangeService service, String eventId, String calendarId) throws Exception {
+  public void deleteAppointmentByExoEventId(String username,
+                                            ExchangeService service,
+                                            String eventId,
+                                            String calendarId) throws Exception {
     String itemId = correspondenceService.getCorrespondingId(username, eventId);
     if (itemId == null) {
       if (LOG.isTraceEnabled()) {
@@ -281,7 +288,6 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * 
    * @param username
    * @param service
    * @param itemId
@@ -292,7 +298,6 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * 
    * @param username
    * @param service
    * @param itemId
@@ -302,27 +307,26 @@ public class ExchangeStorageService implements Serializable {
     Appointment appointment = null;
     try {
       appointment = Appointment.bind(service, itemId);
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Delete Exchange appointment: " + appointment.getSubject());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DELETE Exchange appointment: " + appointment.getSubject());
       }
       appointment.delete(DeleteMode.HardDelete);
     } catch (ServiceResponseException e) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Exchange Item was not bound, it was deleted or not yet created:" + itemId);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Exchange Item was not bound, it was deleted or not yet created:" + itemId);
       }
     }
     correspondenceService.deleteCorrespondingId(username, itemId.getUniqueId());
   }
 
   /**
-   * 
    * @param username
    * @param service
    * @param calendarId
    * @throws Exception
    */
   public void deleteExchangeFolderByCalenarId(String username, ExchangeService service, String calendarId) throws Exception {
-    if (CalendarConverterService.isExchangeCalendarId(calendarId)) {
+    if (CalendarConverterUtils.isExchangeCalendarId(calendarId)) {
       LOG.warn("Can't delete Exchange Calendar, because it was created on Exchange: " + calendarId);
       return;
     }
@@ -334,7 +338,7 @@ public class ExchangeStorageService implements Serializable {
       Folder folder = null;
       try {
         folder = Folder.bind(service, FolderId.getFolderIdFromString(folderId));
-        LOG.trace("Delete Exchange folder: " + folder.getDisplayName());
+        LOG.trace("DELETE Exchange folder: " + folder.getDisplayName());
         folder.delete(DeleteMode.MoveToDeletedItems);
       } catch (ServiceResponseException e) {
         if (LOG.isTraceEnabled()) {
@@ -345,33 +349,7 @@ public class ExchangeStorageService implements Serializable {
     }
   }
 
-  private TimeZoneDefinition getTimeZoneDefinition(ExchangeService service, TimeZone userCalendarTimeZone) {
-    TimeZoneDefinition serverTimeZoneDefinition = null;
-    Iterator<TimeZoneDefinition> timeZoneDefinitions = service.getServerTimeZones().iterator();
-    while (timeZoneDefinitions.hasNext()) {
-      TimeZoneDefinition timeZoneDefinition = (TimeZoneDefinition) timeZoneDefinitions.next();
-      if (timeZoneDefinition.getId().equals(userCalendarTimeZone.getID())) {
-        serverTimeZoneDefinition = timeZoneDefinition;
-        break;
-      }
-    }
-    return serverTimeZoneDefinition;
-  }
-
-  private List<Folder> searchSubFolders(ExchangeService service, FolderId parentFolderId) throws Exception {
-    FolderView view = new FolderView(1000);
-    view.setPropertySet(new PropertySet(BasePropertySet.FirstClassProperties));
-    FindFoldersResults findResults = service.findFolders(parentFolderId, view);
-    return findResults.getFolders();
-  }
-
-  private Appointment getAppointmentOccurence(ExchangeService service, String exchangeMasterId, String recurrenceId) throws Exception {
-    Appointment masterAppointment = Appointment.bind(service, ItemId.getItemIdFromString(exchangeMasterId), new PropertySet(AppointmentSchema.Recurrence));
-    return CalendarConverterService.getAppointmentOccurence(masterAppointment, recurrenceId);
-  }
-
   /**
-   * 
    * @param folderId
    * @return Exchange Folder instance based on Exchange FolderId object
    * @throws Exception
@@ -381,7 +359,6 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * 
    * @param folderId
    * @return Exchange Folder instance based on Exchange FolderId object
    * @throws Exception
@@ -397,35 +374,6 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * 
-   * @param folderId
-   * @return Exchange Folder instance based on Exchange FolderId object
-   * @throws Exception
-   */
-  public Appointment getAppointment(ExchangeService service, String appointmentId) throws Exception {
-    return getAppointment(service, ItemId.getItemIdFromString(appointmentId));
-  }
-
-  /**
-   * 
-   * @param folderId
-   * @return Exchange Folder instance based on Exchange FolderId object
-   * @throws Exception
-   */
-  public Appointment getAppointment(ExchangeService service, ItemId appointmentId) throws Exception {
-    Appointment appointment = null;
-    try {
-      appointment = Appointment.bind(service, appointmentId);
-    } catch (ServiceResponseException e) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Can't get appointment identified by id: " + appointmentId.getUniqueId());
-      }
-    }
-    return appointment;
-  }
-
-  /**
-   * 
    * @param folderId
    * @return Exchange Folder instance based on Exchange FolderId object
    * @throws Exception
@@ -435,7 +383,6 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * 
    * @param folderId
    * @return Exchange Folder instance based on Exchange FolderId object
    * @throws Exception
@@ -448,5 +395,32 @@ public class ExchangeStorageService implements Serializable {
       LOG.warn("Can't get item identified by id: " + itemId.getUniqueId());
     }
     return item;
+  }
+
+  private List<Folder> searchSubFolders(ExchangeService service, FolderId parentFolderId) throws Exception {
+    FolderView view = new FolderView(1000);
+    view.setPropertySet(new PropertySet(BasePropertySet.FirstClassProperties));
+    FindFoldersResults findResults = service.findFolders(parentFolderId, view);
+    return findResults.getFolders();
+  }
+
+  private Appointment getAppointmentOccurence(ExchangeService service,
+                                              String exchangeMasterId,
+                                              String recurrenceId) throws Exception {
+    Appointment masterAppointment = Appointment.bind(service,
+                                                     ItemId.getItemIdFromString(exchangeMasterId),
+                                                     new PropertySet(AppointmentSchema.Recurrence));
+    return CalendarConverterUtils.getAppointmentOccurence(masterAppointment, recurrenceId);
+  }
+
+  private Date getLastModifiedDate(Appointment appointment) throws Exception {
+    try {
+      return appointment.getLastModifiedTime();
+    } catch (ServiceObjectPropertyException e) {
+      Appointment appointmentWithModifiedDate = Appointment.bind(appointment.getService(),
+                                                                 appointment.getId(),
+                                                                 new PropertySet(AppointmentSchema.LastModifiedTime));
+      return appointmentWithModifiedDate.getLastModifiedTime();
+    }
   }
 }

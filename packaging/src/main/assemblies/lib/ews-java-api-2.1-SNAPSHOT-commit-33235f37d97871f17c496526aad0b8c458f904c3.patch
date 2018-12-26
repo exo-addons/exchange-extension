@@ -1,0 +1,375 @@
+diff --git a/pom.xml b/pom.xml
+index e303359b..4e5e3c27 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -96,11 +96,11 @@
+         <maven-surefire-report-plugin.version>2.18.1</maven-surefire-report-plugin.version>
+         <jacoco-maven-plugin.version>0.7.5.201505241946</jacoco-maven-plugin.version>
+         <!--  Dependencies [COMPILE]:  -->
+-        <httpclient.version>4.4.1</httpclient.version>
+-        <httpcore.version>4.4.1</httpcore.version>
++        <httpclient.version>4.3.6</httpclient.version>
++        <httpcore.version>4.3.3</httpcore.version>
+         <commons-logging.version>1.2</commons-logging.version>
+-        <joda-time.version>2.8</joda-time.version>
+-        <commons-lang3.version>3.4</commons-lang3.version>
++        <joda-time.version>1.6.2</joda-time.version>
++        <commons-lang3.version>3.3.2</commons-lang3.version>
+         <commons-io.version>2.4</commons-io.version>
+         <!--  Dependencies [TEST]:  -->
+         <junit.version>4.12</junit.version>
+@@ -121,60 +121,6 @@
+                 <javadoc.doclint.param>-Xdoclint:none</javadoc.doclint.param>
+             </properties>
+         </profile>
+-        <profile>
+-            <!-- maven-checkstyle-plugin required Java 7 or later -->
+-            <id>java-7-or-later-profile</id>
+-            <activation>
+-                <jdk>[1.7,)</jdk>
+-            </activation>
+-            <build>
+-                <plugins>
+-                    <plugin>
+-                    <groupId>org.apache.maven.plugins</groupId>
+-                    <artifactId>maven-checkstyle-plugin</artifactId>
+-                    <version>${maven-checkstyle-plugin.version}</version>
+-                    <configuration>
+-                    <failsOnError>true</failsOnError>
+-                        <configLocation>google_checks.xml</configLocation>
+-                    </configuration>
+-                    <executions>
+-                        <execution>
+-                            <phase>verify</phase>
+-                            <goals>
+-                                <goal>checkstyle</goal>
+-                                </goals>
+-                            </execution>
+-                        </executions>
+-                    </plugin>
+-                </plugins>
+-            </build>
+-        </profile>
+-        <profile>
+-            <id>release-sign-artifacts</id>
+-            <activation>
+-                <property>
+-                    <name>gpg.passphrase</name>
+-                </property>
+-            </activation>
+-            <build>
+-                <plugins>
+-                    <plugin>
+-                        <groupId>org.apache.maven.plugins</groupId>
+-                        <artifactId>maven-gpg-plugin</artifactId>
+-                        <version>${maven-gpg-plugin.version}</version>
+-                        <executions>
+-                            <execution>
+-                                <id>sign-artifacts</id>
+-                                <phase>verify</phase>
+-                                <goals>
+-                                    <goal>sign</goal>
+-                                </goals>
+-                            </execution>
+-                        </executions>
+-                    </plugin>
+-                </plugins>
+-            </build>
+-        </profile>
+     </profiles>
+ 
+     <licenses>
+@@ -296,80 +242,6 @@
+     <build>
+         <plugins>
+             <!-- Deployment / build plugins -->
+-            <plugin>
+-                <groupId>org.sonatype.plugins</groupId>
+-                <artifactId>nexus-staging-maven-plugin</artifactId>
+-                <version>${nexus-staging-maven-plugin.version}</version>
+-                <extensions>true</extensions>
+-                <configuration>
+-                    <!-- Ref.: http://books.sonatype.com/nexus-book/reference/staging-deployment.html -->
+-                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+-                    <serverId>ossrh</serverId>
+-                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+-                </configuration>
+-            </plugin>
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-compiler-plugin</artifactId>
+-                <version>${maven-compiler-plugin.version}</version>
+-                <configuration>
+-                    <encoding>${project.build.sourceEncoding}</encoding>
+-                    <source>${javaLanguage.version}</source>
+-                    <target>${javaLanguage.version}</target>
+-                </configuration>
+-            </plugin>
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-javadoc-plugin</artifactId>
+-                <version>${maven-javadoc-plugin.version}</version>
+-                <configuration>
+-                    <linksource>true</linksource>
+-                    <additionalparam>${javadoc.doclint.param}</additionalparam>
+-                </configuration>
+-                <executions>
+-                    <execution>
+-                        <id>attach-javadocs</id>
+-                        <goals>
+-                            <goal>jar</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-source-plugin</artifactId>
+-                <version>${maven-source-plugin.version}</version>
+-                <executions>
+-                    <execution>
+-                        <id>attach-sources</id>
+-                        <goals>
+-                            <goal>jar-no-fork</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+-            <plugin>
+-                <groupId>org.codehaus.mojo</groupId>
+-                <artifactId>animal-sniffer-maven-plugin</artifactId>
+-                <version>${animal-sniffer-maven-plugin.version}</version>
+-                <configuration>
+-                    <signature>
+-                        <groupId>org.codehaus.mojo.signature</groupId>
+-                        <artifactId>java16-sun</artifactId>
+-                        <version>${animal-sniffer-maven-plugin.signature.version}</version>
+-                    </signature>
+-                </configuration>
+-                <executions>
+-                    <execution>
+-                        <id>check-java16-sun</id>
+-                        <phase>test</phase>
+-                        <goals>
+-                            <goal>check</goal>
+-                        </goals>
+-                    </execution>
+-                </executions>
+-            </plugin>
+-
+             <plugin>
+                 <groupId>org.jacoco</groupId>
+                 <artifactId>jacoco-maven-plugin</artifactId>
+@@ -391,70 +263,5 @@
+             </plugin>
+             <!-- Deployment / build plugins END -->
+         </plugins>
+-        <!-- Used to bump all of the various core plugins up to Maven current.
+-            Use this in conjunction with the versions-maven-plugin to keep your Maven
+-            plugins up to date. -->
+-        <pluginManagement>
+-            <plugins>
+-                <plugin>
+-                    <groupId>org.apache.maven.plugins</groupId>
+-                    <artifactId>maven-site-plugin</artifactId>
+-                    <version>${maven-site-plugin.version}</version>
+-                </plugin>
+-            </plugins>
+-        </pluginManagement>
+     </build>
+-
+-    <reporting>
+-        <plugins>
+-            <!-- Basic report generation. -->
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-project-info-reports-plugin</artifactId>
+-                <version>${maven-project-info-reports-plugin.version}</version>
+-            </plugin>
+-
+-            <!-- Dependency version reporting. Relies on standard version numbering
+-                - you should use standard version numbering too!
+-                http://mojo.codehaus.org/versions-maven-plugin/version-rules.html -->
+-            <plugin>
+-                <groupId>org.codehaus.mojo</groupId>
+-                <artifactId>versions-maven-plugin</artifactId>
+-                <version>${versions-maven-plugin.version}</version>
+-                <reportSets>
+-                    <reportSet>
+-                        <reports>
+-                            <report>dependency-updates-report</report>
+-                            <report>plugin-updates-report</report>
+-                            <report>property-updates-report</report>
+-                        </reports>
+-                    </reportSet>
+-                </reportSets>
+-            </plugin>
+-
+-            <!-- Generates the Javadoc for the report. -->
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-javadoc-plugin</artifactId>
+-                <version>${maven-javadoc-plugin.version}</version>
+-                <configuration>
+-                    <linksource>true</linksource>
+-                    <additionalparam>${javadoc.doclint.param}</additionalparam>
+-                </configuration>
+-            </plugin>
+-
+-            <!-- Generates a nice HTML linked source cross-reference. -->
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-jxr-plugin</artifactId>
+-                <version>${maven-jxr-plugin.version}</version>
+-            </plugin>
+-
+-            <plugin>
+-                <groupId>org.apache.maven.plugins</groupId>
+-                <artifactId>maven-surefire-report-plugin</artifactId>
+-                <version>${maven-surefire-report-plugin.version}</version>
+-            </plugin>
+-        </plugins>
+-    </reporting>
+ </project>
+diff --git a/src/main/java/microsoft/exchange/webservices/data/core/EwsSSLProtocolSocketFactory.java b/src/main/java/microsoft/exchange/webservices/data/core/EwsSSLProtocolSocketFactory.java
+index d4d2fefe..dae71eaa 100644
+--- a/src/main/java/microsoft/exchange/webservices/data/core/EwsSSLProtocolSocketFactory.java
++++ b/src/main/java/microsoft/exchange/webservices/data/core/EwsSSLProtocolSocketFactory.java
+@@ -23,14 +23,11 @@
+ 
+ package microsoft.exchange.webservices.data.core;
+ 
+-import org.apache.http.conn.ssl.DefaultHostnameVerifier;
+-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+-import org.apache.http.ssl.SSLContexts;
+-
+-import javax.net.ssl.HostnameVerifier;
+ import javax.net.ssl.SSLContext;
+ import javax.net.ssl.TrustManager;
+ 
++import org.apache.http.conn.ssl.*;
++
+ import java.security.GeneralSecurityException;
+ 
+ /**
+@@ -81,7 +78,7 @@ public class EwsSSLProtocolSocketFactory extends SSLConnectionSocketFactory {
+   /**
+    * Default hostname verifier.
+    */
+-  private static final HostnameVerifier DEFAULT_HOSTNAME_VERIFIER = new DefaultHostnameVerifier();
++  private static final X509HostnameVerifier DEFAULT_HOSTNAME_VERIFIER = new StrictHostnameVerifier();
+ 
+ 
+   /**
+@@ -97,7 +94,7 @@ public class EwsSSLProtocolSocketFactory extends SSLConnectionSocketFactory {
+    * @param hostnameVerifier hostname verifier
+    */
+   public EwsSSLProtocolSocketFactory(
+-    SSLContext context, HostnameVerifier hostnameVerifier
++    SSLContext context, X509HostnameVerifier hostnameVerifier
+   ) {
+     super(context, hostnameVerifier);
+     this.sslcontext = context;
+@@ -126,7 +123,7 @@ public class EwsSSLProtocolSocketFactory extends SSLConnectionSocketFactory {
+    * @throws GeneralSecurityException on security error
+    */
+   public static EwsSSLProtocolSocketFactory build(
+-    TrustManager trustManager, HostnameVerifier hostnameVerifier
++    TrustManager trustManager, X509HostnameVerifier hostnameVerifier
+   ) throws GeneralSecurityException {
+     SSLContext sslContext = createSslContext(trustManager);
+     return new EwsSSLProtocolSocketFactory(sslContext, hostnameVerifier);
+diff --git a/src/main/java/microsoft/exchange/webservices/data/core/EwsUtilities.java b/src/main/java/microsoft/exchange/webservices/data/core/EwsUtilities.java
+index c822d9bf..e0ee54ad 100644
+--- a/src/main/java/microsoft/exchange/webservices/data/core/EwsUtilities.java
++++ b/src/main/java/microsoft/exchange/webservices/data/core/EwsUtilities.java
+@@ -883,8 +883,8 @@ public final class EwsUtilities {
+       xsDuration = xsDuration.replace("-P", "P");
+     }
+ 
+-    Period period = Period.parse(xsDuration, ISOPeriodFormat.standard());
+-      
++    Period period = ISOPeriodFormat.standard().parsePeriod(xsDuration);
++
+     long retval = period.toStandardDuration().getMillis();
+     
+     if (negative) {
+diff --git a/src/main/java/microsoft/exchange/webservices/data/util/DateTimeUtils.java b/src/main/java/microsoft/exchange/webservices/data/util/DateTimeUtils.java
+index 0a30a3f0..0b101ba4 100644
+--- a/src/main/java/microsoft/exchange/webservices/data/util/DateTimeUtils.java
++++ b/src/main/java/microsoft/exchange/webservices/data/util/DateTimeUtils.java
+@@ -24,6 +24,8 @@
+ package microsoft.exchange.webservices.data.util;
+ 
+ import org.apache.commons.lang3.StringUtils;
++import org.joda.time.DateTime;
++import org.joda.time.DateTimeZone;
+ import org.joda.time.format.DateTimeFormat;
+ import org.joda.time.format.DateTimeFormatter;
+ 
+@@ -69,7 +71,6 @@ public final class DateTimeUtils {
+     return parseInternal(value, true);
+   }
+ 
+-
+   private static Date parseInternal(String value, boolean dateOnly) {
+     String originalValue = value;
+ 
+@@ -78,7 +79,7 @@ public final class DateTimeUtils {
+     } else {
+       if (value.endsWith("z")) {
+         // This seems to be an edge case. Let's uppercase the Z to be sure.
+-        value = value.substring(0, value.length() - 1) + "Z";
++        value = value.toUpperCase();
+       }
+ 
+       final DateTimeFormatter[] formats = dateOnly ? DATE_FORMATS : DATE_TIME_FORMATS;
+@@ -89,6 +90,16 @@ public final class DateTimeUtils {
+           // Ignore and try the next pattern.
+         }
+       }
++
++      // https://stackoverflow.com/questions/21839143/jodatime-string-yyyy-mm-ddthhmmss-z-to-datetime
++      try {
++        return new DateTime(value).toDate();
++      } catch (IllegalArgumentException e) {
++        // Ignore and try the next pattern.
++      }
++      if (value.endsWith("Z")) {
++        return parseInternal(value.substring(0, value.length() -1), dateOnly);
++      }
+     }
+ 
+     throw new IllegalArgumentException(
+@@ -97,21 +108,21 @@ public final class DateTimeUtils {
+ 
+   private static DateTimeFormatter[] createDateTimeFormats() {
+     return new DateTimeFormatter[] {
+-        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ssZ").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSZ").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSS").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSS").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-ddZ").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-dd").withZoneUTC()
++        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ssZ").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSZ").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSS").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSS").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-ddZ").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-dd").withZone(DateTimeZone.UTC)
+     };
+   }
+ 
+   private static DateTimeFormatter[] createDateFormats() {
+     return new DateTimeFormatter[] {
+-        DateTimeFormat.forPattern("yyyy-MM-ddZ").withZoneUTC(),
+-        DateTimeFormat.forPattern("yyyy-MM-dd").withZoneUTC()
++        DateTimeFormat.forPattern("yyyy-MM-ddZ").withZone(DateTimeZone.UTC),
++        DateTimeFormat.forPattern("yyyy-MM-dd").withZone(DateTimeZone.UTC)
+     };
+   }
+
