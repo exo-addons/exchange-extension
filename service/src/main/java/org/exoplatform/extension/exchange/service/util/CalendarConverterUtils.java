@@ -26,6 +26,7 @@ import microsoft.exchange.webservices.data.core.exception.service.local.ServiceL
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceObjectPropertyException;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
+import microsoft.exchange.webservices.data.misc.TimeSpan;
 import microsoft.exchange.webservices.data.property.complex.*;
 import microsoft.exchange.webservices.data.property.complex.recurrence.DayOfTheWeekCollection;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
@@ -979,29 +980,30 @@ public class CalendarConverterUtils {
 
   private static void setAppointmentDates(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
     boolean isAllDay = isAllDayEvent(calendarEvent);
+    Calendar calendar = Calendar.getInstance();
+
+    if (isAllDay) {
+      calendar.setTime(calendarEvent.getFromDateTime());
+      calendar.set(Calendar.HOUR_OF_DAY, 0);
+      calendar.set(Calendar.MINUTE, 0);
+      calendar.set(Calendar.SECOND, 0);
+      calendar.set(Calendar.MILLISECOND, TimeZone.getDefault().getRawOffset());
+    } else {
+      calendar = getCalendarInstance(calendarEvent.getFromDateTime());
+    }
+    appointment.setStart(calendar.getTime());
+
+    if (isAllDay) {
+      calendar.setTime(calendarEvent.getToDateTime());
+      calendar.set(Calendar.HOUR_OF_DAY, 0);
+      calendar.set(Calendar.MINUTE, 0);
+      calendar.set(Calendar.SECOND, 0);
+      calendar.set(Calendar.MILLISECOND, TimeZone.getDefault().getRawOffset());
+    } else {
+      calendar = getCalendarInstance(calendarEvent.getToDateTime());
+    }
+    appointment.setEnd(calendar.getTime());
     appointment.setIsAllDayEvent(isAllDay);
-
-    Date fromDateTime = calendarEvent.getFromDateTime();
-    if (isAllDay) {
-      String dateString = new SimpleDateFormat("yyyy-MM-dd'T00:00:00.000Z'").format(fromDateTime);
-      fromDateTime = DateTimeUtils.convertDateTimeStringToDate(dateString);
-      Calendar calendar = Calendar.getInstance();
-      calendar.setTimeInMillis(fromDateTime.getTime() - TIMEZONE_OFFSET_MILLIS);
-      fromDateTime = calendar.getTime();
-    }
-    appointment.setStart(fromDateTime);
-
-    Date toDateTime = calendarEvent.getToDateTime();
-    if (isAllDay) {
-      String dateString = new SimpleDateFormat("yyyy-MM-dd'T23:59:59.000Z'").format(toDateTime);
-      toDateTime = DateTimeUtils.convertDateTimeStringToDate(dateString);
-      Calendar calendar = Calendar.getInstance();
-      calendar.setTimeInMillis(toDateTime.getTime() - TIMEZONE_OFFSET_MILLIS);
-      calendar.add(Calendar.SECOND, 1);
-      toDateTime = calendar.getTime();
-    }
-    appointment.setEnd(toDateTime);
-    LOG.debug("APPOINTMENT - Set dates: {} to {}", appointment.getStart(), appointment.getEnd());
   }
 
   private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
