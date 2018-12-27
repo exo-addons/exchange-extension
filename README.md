@@ -1,7 +1,9 @@
 exchange-extension
 ==================
 
-1.2 : version for eXoPlatform 4.4
+1.3 : version for eXoPlatform 4.4
+
+1.2 : version for eXoPlatform 4.3
 
 1.1 : version for eXoPlatform 4.2
 

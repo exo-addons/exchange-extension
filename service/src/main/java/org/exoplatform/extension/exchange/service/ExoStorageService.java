@@ -178,11 +178,11 @@ public class ExoStorageService implements Serializable {
   }
 
   /**
-   * Gets User Calendar identified by Exchange folder Id, or creates it if not
+   * Gets User Calendar identified by Exchange folder, or creates it if not
    * existing.
    * 
    * @param username
-   * @param folderId
+   * @param folder
    * @return
    * @throws Exception
    */
@@ -244,7 +244,6 @@ public class ExoStorageService implements Serializable {
    * Updates existing eXo Calendar Event.
    * 
    * @param appointment
-   * @param folder
    * @param username
    * @throws Exception
    */
@@ -256,7 +255,6 @@ public class ExoStorageService implements Serializable {
    * Create non existing eXo Calendar Event.
    * 
    * @param appointment
-   * @param folder
    * @param username
    * @throws Exception
    */
@@ -268,7 +266,6 @@ public class ExoStorageService implements Serializable {
    * Creates or updates eXo Calendar Event.
    * 
    * @param appointment
-   * @param folder
    * @param username
    * @return
    * @throws Exception
@@ -354,6 +351,19 @@ public class ExoStorageService implements Serializable {
     return getEventsByType(calendarHome, Calendar.TYPE_PRIVATE, dateCalendar);
   }
 
+  public void updateModifiedDateOfEvent(String username, CalendarEvent event, Date lastModifiedTime) throws Exception {
+    Node node = storage.getCalendarEventNode(username, event.getCalType(), event.getCalendarId(), event.getId());
+    modifyUpdateDate(node, lastModifiedTime);
+    if (event.getOriginalReference() != null && !event.getOriginalReference().isEmpty()) {
+      Node masterNode = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(event.getOriginalReference());
+      modifyUpdateDate(masterNode, lastModifiedTime);
+    }
+  }
+
+  public CalendarEvent getEvent(String eventId, String username) throws Exception {
+    return storage.getEvent(username, eventId);
+  }
+
   private List<CalendarEvent> getEventsByType(Node calendarHome, int type, java.util.Calendar date) throws Exception {
     List<CalendarEvent> events = new ArrayList<>();
     QueryManager qm = calendarHome.getSession().getWorkspace().getQueryManager();
@@ -370,19 +380,6 @@ public class ExoStorageService implements Serializable {
       events.add(calEvent);
     }
     return events;
-  }
-
-  public void updateModifiedDateOfEvent(String username, CalendarEvent event, Date lastModifiedTime) throws Exception {
-    Node node = storage.getCalendarEventNode(username, event.getCalType(), event.getCalendarId(), event.getId());
-    modifyUpdateDate(node, lastModifiedTime);
-    if (event.getOriginalReference() != null && !event.getOriginalReference().isEmpty()) {
-      Node masterNode = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(event.getOriginalReference());
-      modifyUpdateDate(masterNode, lastModifiedTime);
-    }
-  }
-
-  public CalendarEvent getEvent(String eventId, String username) throws Exception {
-    return storage.getEvent(username, eventId);
   }
 
   private void modifyUpdateDate(Node node, Date lastModifiedTime) throws Exception {

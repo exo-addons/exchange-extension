@@ -380,7 +380,8 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * @param folderId
+   * @param service
+   * @param itemId
    * @return Exchange Folder instance based on Exchange FolderId object
    * @throws Exception
    */
@@ -389,7 +390,8 @@ public class ExchangeStorageService implements Serializable {
   }
 
   /**
-   * @param folderId
+   * @param service
+   * @param itemId
    * @return Exchange Folder instance based on Exchange FolderId object
    * @throws Exception
    */

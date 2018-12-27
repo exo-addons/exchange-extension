@@ -77,8 +77,8 @@ public class CorrespondenceService implements Serializable {
    * delete Correspondence between IDs
    * 
    * @param username
-   * @param id
-   * @return Id of the corresponding element
+   * @param exchangeId
+   * @param exoId
    * @throws Exception
    */
   protected void deleteCorrespondingId(String username, String exchangeId, String exoId) throws Exception {

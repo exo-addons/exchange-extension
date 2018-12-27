@@ -186,7 +186,7 @@ public class IntegrationService {
   /**
    * Checks if eXo associated Calendar is present.
    * 
-   * @param usename
+   * @param id
    * @return true if present.
    * @throws Exception
    */
@@ -197,7 +197,7 @@ public class IntegrationService {
   /**
    * Checks if eXo associated Calendar is present.
    * 
-   * @param usename
+   * @param folderId
    * @return true if present.
    * @throws Exception
    */
@@ -246,7 +246,7 @@ public class IntegrationService {
   }
 
   /**
-   * @param eventId
+   * @param eventNode
    * @throws Exception
    */
   public void updateOrCreateExchangeCalendarEvent(Node eventNode) throws Exception {
@@ -287,6 +287,7 @@ public class IntegrationService {
 
   /**
    * @param eventId
+   * @param calendarId
    * @throws Exception
    */
   public void deleteExchangeCalendarEvent(String eventId, String calendarId) throws Exception {
@@ -479,7 +480,6 @@ public class IntegrationService {
   /**
    * Sets exo and exchange last check full synchronization operation date
    * 
-   * @param username
    * @param time
    * @throws Exception
    */
@@ -539,7 +539,6 @@ public class IntegrationService {
   /**
    * Sets exo last check operation date.
    * 
-   * @param username
    * @param time
    * @throws Exception
    */

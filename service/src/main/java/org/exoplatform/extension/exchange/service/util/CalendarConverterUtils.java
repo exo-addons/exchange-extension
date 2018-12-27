@@ -12,6 +12,7 @@ import org.apache.tika.mime.MimeTypes;
 
 import org.exoplatform.calendar.service.*;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
+import org.exoplatform.calendar.service.impl.NewUserListener;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.extension.exchange.service.CorrespondenceService;
 import org.exoplatform.services.log.ExoLogger;
@@ -358,7 +359,7 @@ public class CalendarConverterUtils {
 
   /**
    * @param event eXo Calendar event
-   * @param item Exchange item
+   * @param appointment Exchange item
    * @return
    * @throws Exception
    */
@@ -375,10 +376,10 @@ public class CalendarConverterUtils {
   /**
    * Converts from Exchange Calendar Event to eXo Calendar Event.
    * 
-   * @param calendarEvent
    * @param appointment
+   * @param calendarEvent
    * @param username
-   * @param calendarService
+   * @param userHandler
    * @throws Exception
    */
   public static void convertExoToExchangeEvent(Appointment appointment,
@@ -409,10 +410,10 @@ public class CalendarConverterUtils {
    * Converts from Exchange Calendar Recurring Master Event to eXo Calendar
    * Event.
    * 
-   * @param event
    * @param appointment
+   * @param event
    * @param username
-   * @param calendarService
+   * @param userHandler
    * @return list of occurences to delete
    * @throws Exception
    */
@@ -583,12 +584,10 @@ public class CalendarConverterUtils {
    * Converts from Exchange Calendar Exceptional Occurence Event to eXo Calendar
    * Event.
    * 
-   * @param masterEvent
-   * @param listEvent
-   * @param masterAppointment
+   * @param occAppointment
+   * @param occEvent
    * @param username
-   * @param calendarService
-   * @return
+   * @param userHandler
    * @throws Exception
    */
   public static void convertExoToExchangeOccurenceEvent(Appointment occAppointment,
@@ -634,7 +633,7 @@ public class CalendarConverterUtils {
    * Checks if Passed eXo Calendar Id becomes from the synchronization with
    * exchange, by testing if the prefix exists or not.
    * 
-   * @param calendarId
+   * @param eventId
    * @return
    */
   public static boolean isExchangeEventId(String eventId) {
@@ -1047,7 +1046,7 @@ public class CalendarConverterUtils {
       appointment.getCategories().clearList();
     }
     if (calendarEvent.getEventCategoryName() != null && !calendarEvent.getEventCategoryName().isEmpty()
-        && !calendarEvent.getEventCategoryId().equals(CalendarService.DEFAULT_EVENTCATEGORY_ID_ALL)) {
+        && !calendarEvent.getEventCategoryId().equals(NewUserListener.DEFAULT_EVENTCATEGORY_ID_ALL)) {
       if (appointment.getCategories() == null) {
         StringList stringList = new StringList();
         appointment.setCategories(stringList);
@@ -1077,9 +1076,9 @@ public class CalendarConverterUtils {
         calendarEvent.setEventCategoryName(category.getName());
       }
     } else {
-      EventCategory category = getEventCategoryByName(storage, username, CalendarService.DEFAULT_EVENTCATEGORY_NAME_ALL);
+      EventCategory category = getEventCategoryByName(storage, username, NewUserListener.DEFAULT_EVENTCATEGORY_NAME_ALL);
       if (category == null) {
-        LOG.warn("Default category (" + CalendarService.DEFAULT_EVENTCATEGORY_NAME_ALL + ")of eXo Calendar is null for user: "
+        LOG.warn("Default category (" + NewUserListener.DEFAULT_EVENTCATEGORY_NAME_ALL + ")of eXo Calendar is null for user: "
             + username + ".");
       } else {
         calendarEvent.setEventCategoryId(category.getId());
