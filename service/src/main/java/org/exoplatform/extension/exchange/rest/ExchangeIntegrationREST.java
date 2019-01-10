@@ -1,4 +1,4 @@
-package org.exoplatform.extension.exchange.service;
+package org.exoplatform.extension.exchange.rest;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -9,9 +9,10 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.*;
 
 import org.exoplatform.common.http.HTTPStatus;
-import org.exoplatform.extension.exchange.listener.IntegrationListener;
 import org.exoplatform.extension.exchange.model.FolderBean;
 import org.exoplatform.extension.exchange.model.UserSettings;
+import org.exoplatform.extension.exchange.service.SynchronizationService;
+import org.exoplatform.extension.exchange.task.UserIntegrationFacade;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.OrganizationService;
@@ -25,10 +26,10 @@ import microsoft.exchange.webservices.data.property.complex.FolderId;
  * @author Boubaker Khanfir
  */
 @Path("/exchange")
-public class ExchangeRESTService implements ResourceContainer, Serializable {
+public class ExchangeIntegrationREST implements ResourceContainer, Serializable {
   private static final long serialVersionUID = -8085801604143848875L;
 
-  private static final Log  LOG              = ExoLogger.getLogger(ExchangeRESTService.class);
+  private static final Log  LOG              = ExoLogger.getLogger(ExchangeIntegrationREST.class);
 
   static CacheControl       cc               = new CacheControl();
   static {
@@ -36,12 +37,12 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     cc.setNoStore(true);
   }
 
-  private transient IntegrationListener integrationListener;
+  private transient SynchronizationService synchronizationService;
 
-  private transient OrganizationService organizationService;
+  private transient OrganizationService    organizationService;
 
-  public ExchangeRESTService(IntegrationListener integrationListener, OrganizationService organizationService) {
-    this.integrationListener = integrationListener;
+  public ExchangeIntegrationREST(SynchronizationService synchronizationService, OrganizationService organizationService) {
+    this.synchronizationService = synchronizationService;
     this.organizationService = organizationService;
   }
 
@@ -56,7 +57,7 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     try {
       List<FolderBean> beans = new ArrayList<>();
 
-      IntegrationService service = IntegrationService.getInstance(username);
+      UserIntegrationFacade service = UserIntegrationFacade.getInstance(username);
       if (service != null) {
         List<FolderId> folderIDs = service.getAllExchangeCalendars();
         for (FolderId folderId : folderIDs) {
@@ -83,7 +84,7 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
   public Response synchronizeNow() {
     try {
       String username = getCurrentUser();
-      integrationListener.synchronize(username);
+      synchronizationService.synchronize(username);
       return Response.ok().build();
     } catch (Exception e) {
       LOG.error("Error while synchronizing manually the calendars", e);
@@ -102,9 +103,9 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     // It must be a user present in the session because of RolesAllowed
     // annotation
     String username = getCurrentUser();
-    IntegrationService service = IntegrationService.getInstance(username);
+    UserIntegrationFacade service = UserIntegrationFacade.getInstance(username);
     service.addFolderToSynchronization(folderIdString);
-    integrationListener.synchronize(username);
+    synchronizationService.synchronize(username);
     return Response.ok().build();
   }
 
@@ -119,9 +120,9 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     // It must be a user present in the session because of RolesAllowed
     // annotation
     String username = getCurrentUser();
-    IntegrationService service = IntegrationService.getInstance(username);
+    UserIntegrationFacade service = UserIntegrationFacade.getInstance(username);
     service.deleteFolderFromSynchronization(folderIdString);
-    integrationListener.synchronize(username);
+    synchronizationService.synchronize(username);
     return Response.ok().build();
   }
 
@@ -135,18 +136,20 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
 
       UserSettings settings = new UserSettings();
 
-      String exchangeServerName = IntegrationService.getUserArrtibute(organizationService,
-                                                                      username,
-                                                                      IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
-      String exchangeDomainName = IntegrationService.getUserArrtibute(organizationService,
-                                                                      username,
-                                                                      IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
-      String exchangeUsername = IntegrationService.getUserArrtibute(organizationService,
-                                                                    username,
-                                                                    IntegrationService.USER_EXCHANGE_USERNAME_ATTRIBUTE);
+      String exchangeServerName =
+                                UserIntegrationFacade.getUserArrtibute(organizationService,
+                                                                       username,
+                                                                       UserIntegrationFacade.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
+      String exchangeDomainName =
+                                UserIntegrationFacade.getUserArrtibute(organizationService,
+                                                                       username,
+                                                                       UserIntegrationFacade.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
+      String exchangeUsername = UserIntegrationFacade.getUserArrtibute(organizationService,
+                                                                       username,
+                                                                       UserIntegrationFacade.USER_EXCHANGE_USERNAME_ATTRIBUTE);
 
-      settings.setServerName(exchangeServerName == null ? integrationListener.getExchangeServerURL() : exchangeServerName);
-      settings.setDomainName(exchangeDomainName == null ? integrationListener.getExchangeDomain() : exchangeDomainName);
+      settings.setServerName(exchangeServerName == null ? synchronizationService.getExchangeServerURL() : exchangeServerName);
+      settings.setDomainName(exchangeDomainName == null ? synchronizationService.getExchangeDomain() : exchangeDomainName);
       settings.setUsername(exchangeUsername == null ? username : exchangeUsername);
 
       return Response.ok(settings, MediaType.APPLICATION_JSON).cacheControl(cc).build();
@@ -163,29 +166,29 @@ public class ExchangeRESTService implements ResourceContainer, Serializable {
     try {
       String username = getCurrentUser();
 
-      IntegrationService.setUserArrtibute(organizationService,
-                                          username,
-                                          IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE,
-                                          settings.getServerName());
-      IntegrationService.setUserArrtibute(organizationService,
-                                          username,
-                                          IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE,
-                                          settings.getDomainName());
-      IntegrationService.setUserArrtibute(organizationService,
-                                          username,
-                                          IntegrationService.USER_EXCHANGE_USERNAME_ATTRIBUTE,
-                                          settings.getUsername());
-      IntegrationService.setUserArrtibute(organizationService,
-                                          username,
-                                          IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE,
-                                          settings.getPassword());
+      UserIntegrationFacade.setUserArrtibute(organizationService,
+                                             username,
+                                             UserIntegrationFacade.USER_EXCHANGE_SERVER_URL_ATTRIBUTE,
+                                             settings.getServerName());
+      UserIntegrationFacade.setUserArrtibute(organizationService,
+                                             username,
+                                             UserIntegrationFacade.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE,
+                                             settings.getDomainName());
+      UserIntegrationFacade.setUserArrtibute(organizationService,
+                                             username,
+                                             UserIntegrationFacade.USER_EXCHANGE_USERNAME_ATTRIBUTE,
+                                             settings.getUsername());
+      UserIntegrationFacade.setUserArrtibute(organizationService,
+                                             username,
+                                             UserIntegrationFacade.USER_EXCHANGE_PASSWORD_ATTRIBUTE,
+                                             settings.getPassword());
 
-      integrationListener.userLoggedOut(username);
-      integrationListener.startExchangeSynchronizationTask(username,
-                                                           settings.getUsername(),
-                                                           settings.getPassword(),
-                                                           settings.getDomainName(),
-                                                           settings.getServerName());
+      synchronizationService.userLoggedOut(username);
+      synchronizationService.startExchangeSynchronizationTask(username,
+                                                          settings.getUsername(),
+                                                          settings.getPassword(),
+                                                          settings.getDomainName(),
+                                                          settings.getServerName());
 
       return Response.ok().cacheControl(cc).build();
     } catch (Exception e) {

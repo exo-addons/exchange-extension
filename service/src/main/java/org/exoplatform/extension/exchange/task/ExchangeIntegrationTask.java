@@ -1,4 +1,4 @@
-package org.exoplatform.extension.exchange.listener;
+package org.exoplatform.extension.exchange.task;
 
 import java.net.URI;
 import java.util.*;
@@ -9,7 +9,6 @@ import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.extension.exchange.service.*;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
-import org.exoplatform.services.organization.OrganizationService;
 import org.exoplatform.services.security.ConversationState;
 import org.exoplatform.services.security.Identity;
 
@@ -28,32 +27,33 @@ import microsoft.exchange.webservices.data.property.complex.FolderId;
  */
 @SuppressWarnings("deprecation")
 public class ExchangeIntegrationTask extends Thread {
-  private static final Log    LOG               = ExoLogger.getLogger(ExchangeIntegrationTask.class);
+  private static final Log      LOG               = ExoLogger.getLogger(ExchangeIntegrationTask.class);
 
-  private static final String LOG_SEPARATOR     = "---------------------";
+  private ExchangeService       service;
 
-  private ExchangeService     service;
+  private PullSubscription      subscription      = null;
 
-  private PullSubscription    subscription      = null;
+  private UserIntegrationFacade integrationService;
 
-  private IntegrationService  integrationService;
+  private List<FolderId>        calendarFolderIds = new ArrayList<>();
 
-  private List<FolderId>      calendarFolderIds = new ArrayList<>();
+  private String                username;
 
-  private String              username;
+  private ConversationState     state;
 
-  private ConversationState   state;
+  private boolean               firstSynchronization;
 
-  private boolean             firstSynchronization;
+  private boolean               firstSynchronizationRunning;
 
-  private boolean             synchronizeAllExchangeFolders;
+  private Date                  firstSynchronizationStartDate;
 
-  private boolean             deleteExoCalendarOnUnsync;
+  private boolean               synchronizeAllExchangeFolders;
 
-  public ExchangeIntegrationTask(OrganizationService organizationService,
-                                 CalendarService calendarService,
-                                 ExoStorageService exoStorageService,
-                                 ExchangeStorageService exchangeStorageService,
+  private boolean               deleteExoCalendarOnUnsync;
+
+  public ExchangeIntegrationTask(CalendarService calendarService,
+                                 ExoDataStorageService exoStorageService,
+                                 ExchangeDataStorageService exchangeStorageService,
                                  CorrespondenceService correspondenceService,
                                  Identity identity,
                                  String exchangeUsername,
@@ -61,7 +61,8 @@ public class ExchangeIntegrationTask extends Thread {
                                  String exchangeDomain,
                                  String exchangeServerURL,
                                  boolean synchronizeAllExchangeFolders,
-                                 boolean deleteExoCalendarOnUnsync)
+                                 boolean deleteExoCalendarOnUnsync,
+                                 int maxFirstSynchronizationDays)
       throws Exception {
     this.username = identity.getUserId();
     this.firstSynchronization = true;
@@ -114,7 +115,6 @@ public class ExchangeIntegrationTask extends Thread {
             } catch (Exception exp2) {
               authenticated = false;
             }
-
           }
         }
       }
@@ -136,13 +136,13 @@ public class ExchangeIntegrationTask extends Thread {
       }
     }
 
-    integrationService = new IntegrationService(organizationService,
-                                                calendarService,
-                                                exoStorageService,
-                                                exchangeStorageService,
-                                                correspondenceService,
-                                                service,
-                                                username);
+    integrationService = new UserIntegrationFacade(calendarService,
+                                                   exoStorageService,
+                                                   exchangeStorageService,
+                                                   correspondenceService,
+                                                   service,
+                                                   username,
+                                                   maxFirstSynchronizationDays);
 
     // Set current identity visible in this Thread
     state = new ConversationState(identity);
@@ -177,6 +177,7 @@ public class ExchangeIntegrationTask extends Thread {
     if (!waitOtherTasks()) {
       return;
     }
+    boolean firstSynchronizationIteration = false;
     try {
       ConversationState.setCurrent(state);
 
@@ -192,44 +193,46 @@ public class ExchangeIntegrationTask extends Thread {
       if (updatedExoEventIDs == null) {
         updatedExoEventIDs = new ArrayList<>();
       }
-      Date lastSyncDate = integrationService.getUserLastCheckDate();
+      Date exoLastSyncDate = integrationService.getUserExoLastCheckDate();
+
       // This is used once, when user login
       if (firstSynchronization) {
-        if (LOG.isTraceEnabled()) {
-          LOG.trace(LOG_SEPARATOR);
-          LOG.trace("run first synchronization for user: " + username);
-        }
-
-        // Begin catching events from Exchange
-        newSubscription();
-
-        // Verify modifications made on folders
-        synchronizeByModificationDate(lastSyncDate, updatedExoEventIDs);
         this.firstSynchronization = false;
-      } else {
-        if (LOG.isTraceEnabled()) {
-          LOG.trace(LOG_SEPARATOR);
-          LOG.trace("run scheduled synchronization for user: " + username);
-        }
-        // This is used in a scheduled task when the user session still alive
-        GetEventsResults events = getEvents();
-        if (synchronizeAllExchangeFolders) {
-          synchronizeExchangeFolders(events, updatedExoEventIDs);
-        }
-        synchronizeExchangeApointments(events, lastSyncDate, updatedExoEventIDs);
-        synchronizeByModificationDate(lastSyncDate, updatedExoEventIDs);
+        this.firstSynchronizationRunning = firstSynchronizationIteration = true;
+        this.firstSynchronizationStartDate = java.util.Calendar.getInstance().getTime();
+
+        // Allow parallel synchronization while the first synchrnonization is
+        // running
+        integrationService.setSynchronizationStopped();
+      } else if (exoLastSyncDate == null && this.firstSynchronizationRunning) {
+        exoLastSyncDate = this.firstSynchronizationStartDate;
       }
 
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("run scheduled synchronization for user: " + username);
+      }
+
+      // This is used in a scheduled task when the user session still alive
+      GetEventsResults events = getEvents();
+      if (synchronizeAllExchangeFolders) {
+        synchronizeExchangeFolders(events, updatedExoEventIDs);
+      }
+
+      synchronizeExchangeApointments(events, updatedExoEventIDs);
+      synchronizeByModificationDate(firstSynchronizationIteration ? null : exoLastSyncDate, updatedExoEventIDs);
+
       // Update date of last check in a user profile attribute
-      integrationService.setUserLastCheckDate(newLastTimeCheck);
+      integrationService.setUserExoLastCheckDate(newLastTimeCheck);
 
       if (LOG.isTraceEnabled()) {
         LOG.trace("Synchronization completed.");
-        LOG.trace(LOG_SEPARATOR);
       }
     } catch (Exception e) {
       LOG.error("Error while synchronizing calendar entries.", e);
     } finally {
+      if (firstSynchronizationIteration) {
+        this.firstSynchronizationRunning = false;
+      }
       integrationService.setSynchronizationStopped();
     }
   }
@@ -265,6 +268,10 @@ public class ExchangeIntegrationTask extends Thread {
 
   private GetEventsResults getEvents() throws Exception {
     GetEventsResults events = null;
+    if (subscription == null) {
+      newSubscription();
+    }
+
     try {
       events = subscription.getEvents();
     } catch (Exception e) {
@@ -272,6 +279,7 @@ public class ExchangeIntegrationTask extends Thread {
       newSubscription();
       events = subscription.getEvents();
     }
+
     return events;
   }
 
@@ -282,8 +290,9 @@ public class ExchangeIntegrationTask extends Thread {
         LOG.trace("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'"
             + username + "'.");
       }
+
       try {
-        Thread.sleep(1000);
+        Thread.sleep(3000);
       } catch (Exception e) {
         LOG.warn(e.getMessage());
       }
@@ -292,22 +301,20 @@ public class ExchangeIntegrationTask extends Thread {
     return i < 5;
   }
 
-  private void synchronizeByModificationDate(Date lastSyncDate, List<String> updatedExoEventIDs) throws Exception {
+  private void synchronizeByModificationDate(Date exoLastSyncDate, List<String> updatedExoEventIDs) throws Exception {
     // synchronize eXo Calendar with Exchange
     for (FolderId folderId : calendarFolderIds) {
       Calendar calendar = integrationService.getUserCalendarByExchangeFolderId(folderId);
-      if (calendar == null || lastSyncDate == null) {
+      if (calendar == null || exoLastSyncDate == null) {
         integrationService.synchronizeFullCalendar(folderId);
       } else {
-        integrationService.synchronizeModificationsOfCalendar(folderId, lastSyncDate, updatedExoEventIDs);
+        integrationService.synchronizeModificationsOfCalendar(folderId, exoLastSyncDate, updatedExoEventIDs);
       }
     }
   }
 
   @SuppressWarnings("all")
-  private long synchronizeExchangeApointments(GetEventsResults events,
-                                              Date lastSyncDate,
-                                              List<String> updatedExoEventIDs) throws Exception {
+  private long synchronizeExchangeApointments(GetEventsResults events, List<String> updatedExoEventIDs) throws Exception {
     // loop through Appointment events
     Iterable<ItemEvent> itemEvents = events.getItemEvents();
     long lastTimeCheck = System.currentTimeMillis();
@@ -318,7 +325,7 @@ public class ExchangeIntegrationTask extends Thread {
           continue;
         }
         itemIds.add(itemEvent.getItemId().getUniqueId());
-        List<CalendarEvent> updatedEvents = integrationService.createOrUpdateOrDelete(itemEvent, lastSyncDate);
+        List<CalendarEvent> updatedEvents = integrationService.createOrUpdateOrDelete(itemEvent);
         if (updatedEvents != null && !updatedEvents.isEmpty() && updatedExoEventIDs != null) {
           for (CalendarEvent calendarEvent : updatedEvents) {
             updatedExoEventIDs.add(calendarEvent.getId());
@@ -364,8 +371,10 @@ public class ExchangeIntegrationTask extends Thread {
     if (LOG.isTraceEnabled()) {
       LOG.trace("New Subscription for user: " + username);
     }
+    String waterMark = null;
     if (subscription != null) {
       try {
+        waterMark = subscription.getWaterMark();
         subscription.unsubscribe();
       } catch (Exception e) {
         // Nothing to do, subscription may be timed out
@@ -377,7 +386,7 @@ public class ExchangeIntegrationTask extends Thread {
     subscription = integrationService.getService()
                                      .subscribeToPullNotifications(calendarFolderIds,
                                                                    5,
-                                                                   null,
+                                                                   waterMark,
                                                                    EventType.Modified,
                                                                    EventType.Created,
                                                                    EventType.Deleted);

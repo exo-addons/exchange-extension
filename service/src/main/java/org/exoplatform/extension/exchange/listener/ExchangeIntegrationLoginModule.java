@@ -8,6 +8,7 @@ import javax.security.auth.login.LoginException;
 import org.apache.commons.lang.StringUtils;
 
 import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.extension.exchange.service.SynchronizationService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.jaas.AbstractLoginModule;
@@ -19,7 +20,7 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
 
   private static final Log    LOG      = ExoLogger.getLogger(ExchangeIntegrationLoginModule.class);
 
-  private IntegrationListener exchangeListenerService;
+  private SynchronizationService synchronizationService;
 
   private String              username = null;
 
@@ -69,10 +70,10 @@ public class ExchangeIntegrationLoginModule extends AbstractLoginModule {
     return LOG;
   }
 
-  public IntegrationListener getExchangeListenerService() {
-    if (exchangeListenerService == null) {
-      this.exchangeListenerService = CommonsUtils.getService(IntegrationListener.class);
+  public SynchronizationService getExchangeListenerService() {
+    if (synchronizationService == null) {
+      this.synchronizationService = CommonsUtils.getService(SynchronizationService.class);
     }
-    return exchangeListenerService;
+    return synchronizationService;
   }
 }

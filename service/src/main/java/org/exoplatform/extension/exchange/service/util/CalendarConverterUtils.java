@@ -6,6 +6,7 @@ import java.util.*;
 import java.util.Calendar;
 import java.util.stream.Collectors;
 
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 import org.apache.commons.lang.StringUtils;
 import org.apache.tika.mime.MimeTypes;
@@ -27,12 +28,10 @@ import microsoft.exchange.webservices.data.core.exception.service.local.ServiceL
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceObjectPropertyException;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
-import microsoft.exchange.webservices.data.misc.TimeSpan;
 import microsoft.exchange.webservices.data.property.complex.*;
 import microsoft.exchange.webservices.data.property.complex.recurrence.DayOfTheWeekCollection;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence.*;
-import microsoft.exchange.webservices.data.util.DateTimeUtils;
 
 /**
  * @author Boubaker Khanfir
@@ -42,17 +41,13 @@ public class CalendarConverterUtils {
 
   private static final Log                LOG                           = ExoLogger.getLogger(CalendarConverterUtils.class);
 
-  public static final String              EXCHANGE_CALENDAR_NAME_PREFIX = "EXCH";
-
-  public static final String              EXCHANGE_CALENDAR_ID_PREFIX   = "EXCH";
-
-  public static final String              EXCHANGE_EVENT_ID_PREFIX      = "ExcangeEvent";
-
-  public static final SimpleDateFormat    UTC_DATE_FORMAT               = new SimpleDateFormat("dd MMM yyyy HH:mm:ss");
-
   public static final SimpleDateFormat    RECURRENCE_ID_FORMAT          = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
 
-  private static final int                TIMEZONE_OFFSET_MILLIS        = TimeZone.getDefault().getRawOffset();
+  private static final String             EXCHANGE_CALENDAR_NAME_PREFIX = "EXCH";
+
+  private static final String             EXCHANGE_CALENDAR_ID_PREFIX   = "EXCH";
+
+  private static final String             EXCHANGE_EVENT_ID_PREFIX      = "ExcangeEvent";
 
   // Reuse the object and save memory instead of instantiating this every call
   private static final ThreadLocal<Query> queryThreadLocal              = new ThreadLocal<>();
@@ -645,10 +640,13 @@ public class CalendarConverterUtils {
    * 
    * @param appointmentId
    * @return
-   * @throws Exception
    */
-  public static String getEventId(String appointmentId) throws Exception {
-    return EXCHANGE_EVENT_ID_PREFIX + appointmentId.hashCode();
+  public static String getEventId(String appointmentId) {
+    return EXCHANGE_EVENT_ID_PREFIX + hashCode(appointmentId);
+  }
+
+  private static String hashCode(String appointmentId) {
+    return DigestUtils.sha256Hex(appointmentId);
   }
 
   /**

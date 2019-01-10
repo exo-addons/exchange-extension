@@ -1,4 +1,4 @@
-package org.exoplatform.extension.exchange.listener;
+package org.exoplatform.extension.exchange.service;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -11,7 +11,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.xml.InitParams;
-import org.exoplatform.extension.exchange.service.*;
+import org.exoplatform.extension.exchange.task.ExchangeIntegrationTask;
+import org.exoplatform.extension.exchange.task.UserIntegrationFacade;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.OrganizationService;
@@ -25,10 +26,10 @@ import org.exoplatform.services.security.*;
  * 
  * @author Boubaker KHANFIR
  */
-public class IntegrationListener implements Startable {
+public class SynchronizationService implements Startable {
 
   private static final Log                      LOG                                       =
-                                                    ExoLogger.getLogger(IntegrationListener.class);
+                                                    ExoLogger.getLogger(SynchronizationService.class);
 
   private static final String                   EXCHANGE_SERVER_URL_PARAM_NAME            = "exchange.ews.url";
 
@@ -39,6 +40,8 @@ public class IntegrationListener implements Startable {
   private static final int                      EXCHANGE_LISTENER_SCHEDULER_DELAY_MINIMUM = 5;
 
   private static final String                   EXCHANGE_SYNCHRONIZE_ALL                  = "exchange.synchronize.all.folders";
+
+  private static final String                   EXCHANGE_MAX_DAYS                         = "exchange.synchronize.max.days";
 
   private static final String                   EXCHANGE_DELETE_CALENDAR_ON_UNSYNC        = "exchange.delete.calendar.on.unsync";
 
@@ -51,17 +54,17 @@ public class IntegrationListener implements Startable {
 
   private final Map<String, Runnable>           runnables                                 = new HashMap<>();
 
-  private final ExoStorageService               exoStorageService;
+  private final ExoDataStorageService           exoStorageService;
 
-  private final ExchangeStorageService          exchangeStorageService;
+  private final ExchangeDataStorageService      exchangeStorageService;
 
   private final CorrespondenceService           correspondenceService;
 
-  private final OrganizationService             organizationService;
+  private OrganizationService                   organizationService;
 
-  private final CalendarService                 calendarService;
+  private CalendarService                       calendarService;
 
-  private final IdentityRegistry                identityRegistry;
+  private IdentityRegistry                      identityRegistry;
 
   private String                                exchangeServerURL;
 
@@ -71,19 +74,15 @@ public class IntegrationListener implements Startable {
 
   private boolean                               deleteExoCalendarOnUnsync                 = false;
 
-  public IntegrationListener(OrganizationService organizationService,
-                             CalendarService calendarService,
-                             ExoStorageService exoStorageService,
-                             ExchangeStorageService exchangeStorageService,
-                             CorrespondenceService correspondenceService,
-                             IdentityRegistry identityRegistry,
-                             InitParams params) {
+  private int                                   maxFirstSynchronizationDays               = 365;
+
+  public SynchronizationService(ExoDataStorageService exoStorageService,
+                                ExchangeDataStorageService exchangeStorageService,
+                                CorrespondenceService correspondenceService,
+                                InitParams params) {
     this.exoStorageService = exoStorageService;
     this.exchangeStorageService = exchangeStorageService;
     this.correspondenceService = correspondenceService;
-    this.identityRegistry = identityRegistry;
-    this.organizationService = organizationService;
-    this.calendarService = calendarService;
 
     ThreadFactory namedThreadFactory = new ThreadFactoryBuilder().setNameFormat("ExchangeSynchronization-%d").build();
     this.scheduledExecutor = Executors.newScheduledThreadPool(10, namedThreadFactory);
@@ -130,6 +129,13 @@ public class IntegrationListener implements Startable {
         this.synchronizeAllExchangeFolders = true;
       }
     }
+
+    if (params.containsKey(EXCHANGE_MAX_DAYS)) {
+      String exchangeMaxDaysString = params.getValueParam(EXCHANGE_MAX_DAYS).getValue();
+      if (StringUtils.isNotBlank(exchangeMaxDaysString)) {
+        this.maxFirstSynchronizationDays = Integer.parseInt(exchangeMaxDaysString);
+      }
+    }
   }
 
   @Override
@@ -157,21 +163,23 @@ public class IntegrationListener implements Startable {
    * @param password
    */
   public void userLoggedIn(final String username, final String password) throws Exception {
-    String exchangeStoredUsername = IntegrationService.getUserArrtibute(organizationService,
-                                                                        username,
-                                                                        IntegrationService.USER_EXCHANGE_USERNAME_ATTRIBUTE);
+    String exchangeStoredUsername =
+                                  UserIntegrationFacade.getUserArrtibute(getOrganizationService(),
+                                                                         username,
+                                                                         UserIntegrationFacade.USER_EXCHANGE_USERNAME_ATTRIBUTE);
     if (StringUtils.isNotBlank(exchangeStoredUsername)) {
       String exchangeStoredServerName =
-                                      IntegrationService.getUserArrtibute(organizationService,
-                                                                          username,
-                                                                          IntegrationService.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
+                                      UserIntegrationFacade.getUserArrtibute(getOrganizationService(),
+                                                                             username,
+                                                                             UserIntegrationFacade.USER_EXCHANGE_SERVER_URL_ATTRIBUTE);
       String exchangeStoredDomainName =
-                                      IntegrationService.getUserArrtibute(organizationService,
-                                                                          username,
-                                                                          IntegrationService.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
-      String exchangeStoredPassword = IntegrationService.getUserArrtibute(organizationService,
-                                                                          username,
-                                                                          IntegrationService.USER_EXCHANGE_PASSWORD_ATTRIBUTE);
+                                      UserIntegrationFacade.getUserArrtibute(getOrganizationService(),
+                                                                             username,
+                                                                             UserIntegrationFacade.USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE);
+      String exchangeStoredPassword =
+                                    UserIntegrationFacade.getUserArrtibute(getOrganizationService(),
+                                                                           username,
+                                                                           UserIntegrationFacade.USER_EXCHANGE_PASSWORD_ATTRIBUTE);
       startExchangeSynchronizationTask(username,
                                        exchangeStoredUsername,
                                        exchangeStoredPassword,
@@ -202,8 +210,11 @@ public class IntegrationListener implements Startable {
                                                String exchangeDomain,
                                                String exchangeServerURL) {
     try {
+      if (StringUtils.isBlank(password) || StringUtils.isBlank(exchangeUsername) || StringUtils.isBlank(exchangeServerURL)) {
+        return;
+      }
       exchangeUsername = exchangeUsername.trim();
-      Identity identity = identityRegistry.getIdentity(username);
+      Identity identity = getIdentityRegistry().getIdentity(username);
       if (identity == null || identity.getUserId().equals(IdentityConstants.ANONIM)) {
         throw new IllegalStateException("Identity of user '" + username + "' not found.");
       }
@@ -213,8 +224,7 @@ public class IntegrationListener implements Startable {
       closeTaskIfExists(username);
 
       // Scheduled task: listen the changes made on MS Exchange Calendar
-      Runnable schedulerCommand = new ExchangeIntegrationTask(organizationService,
-                                                              calendarService,
+      Runnable schedulerCommand = new ExchangeIntegrationTask(getCalendarService(),
                                                               exoStorageService,
                                                               exchangeStorageService,
                                                               correspondenceService,
@@ -224,7 +234,8 @@ public class IntegrationListener implements Startable {
                                                               exchangeDomain,
                                                               exchangeServerURL,
                                                               synchronizeAllExchangeFolders,
-                                                              deleteExoCalendarOnUnsync);
+                                                              deleteExoCalendarOnUnsync,
+                                                              maxFirstSynchronizationDays);
 
       ScheduledFuture<?> future = scheduledExecutor.scheduleWithFixedDelay(schedulerCommand,
                                                                            10,
@@ -273,7 +284,7 @@ public class IntegrationListener implements Startable {
     ScheduledFuture<?> future = futures.remove(username);
     if (future != null) {
       future.cancel(true);
-      IntegrationService integrationService = IntegrationService.getInstance(username);
+      UserIntegrationFacade integrationService = UserIntegrationFacade.getInstance(username);
       if (integrationService != null) {
         try {
           integrationService.removeInstance();
@@ -284,5 +295,26 @@ public class IntegrationListener implements Startable {
       }
       LOG.info("Exchange synchronization task stopped for User '" + username + "'.");
     }
+  }
+
+  public CalendarService getCalendarService() {
+    if (calendarService == null) {
+      calendarService = CommonsUtils.getService(CalendarService.class);
+    }
+    return calendarService;
+  }
+
+  public OrganizationService getOrganizationService() {
+    if (organizationService == null) {
+      organizationService = CommonsUtils.getService(OrganizationService.class);
+    }
+    return organizationService;
+  }
+
+  public IdentityRegistry getIdentityRegistry() {
+    if (identityRegistry == null) {
+      identityRegistry = CommonsUtils.getService(IdentityRegistry.class);
+    }
+    return identityRegistry;
   }
 }

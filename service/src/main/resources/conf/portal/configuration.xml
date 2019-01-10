@@ -3,7 +3,7 @@
 	xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_2.xsd http://www.exoplatform.org/xml/ns/kernel_1_2.xsd"
 	xmlns="http://www.exoplatform.org/xml/ns/kernel_1_2.xsd">
 	<component>
-		<type>org.exoplatform.extension.exchange.listener.IntegrationListener</type>
+		<type>org.exoplatform.extension.exchange.service.SynchronizationService</type>
 		<init-params>
 			<value-param>
 				<name>exchange.ews.url</name>
@@ -17,19 +17,23 @@
 				<name>exchange.scheduler.delay</name>
 				<value>${exchange.scheduler.delay:30}</value>
 			</value-param>
+			<value-param>
+				<name>exchange.synchronize.max.days</name>
+				<value>${exchange.synchronize.max.days:365}</value>
+			</value-param>
 		</init-params>
 	</component>
 	<component>
-		<type>org.exoplatform.extension.exchange.service.ExoStorageService</type>
+		<type>org.exoplatform.extension.exchange.service.ExoDataStorageService</type>
 	</component>
 	<component>
-		<type>org.exoplatform.extension.exchange.service.ExchangeStorageService</type>
+		<type>org.exoplatform.extension.exchange.service.ExchangeDataStorageService</type>
 	</component>
 	<component>
 		<type>org.exoplatform.extension.exchange.service.CorrespondenceService</type>
 	</component>
 	<component>
-		<type>org.exoplatform.extension.exchange.service.ExchangeRESTService</type>
+		<type>org.exoplatform.extension.exchange.rest.ExchangeIntegrationREST</type>
 	</component>
 	<external-component-plugins>
 		<target-component>org.exoplatform.services.jcr.impl.ext.action.SessionActionCatalog</target-component>

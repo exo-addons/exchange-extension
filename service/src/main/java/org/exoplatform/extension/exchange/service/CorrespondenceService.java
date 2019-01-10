@@ -9,6 +9,7 @@ import javax.jcr.Session;
 import org.apache.commons.io.output.ByteArrayOutputStream;
 
 import org.exoplatform.calendar.service.Utils;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterUtils;
 import org.exoplatform.services.jcr.ext.app.SessionProviderService;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
@@ -28,12 +29,7 @@ public class CorrespondenceService implements Serializable {
 
   private transient NodeHierarchyCreator   hierarchyCreator;
 
-  private transient SessionProviderService providerService;
-
-  public CorrespondenceService(NodeHierarchyCreator hierarchyCreator, SessionProviderService providerService) {
-    this.hierarchyCreator = hierarchyCreator;
-    this.providerService = providerService;
-  }
+  private transient SessionProviderService sessionProviderService;
 
   /**
    * Gets Id of exchange from eXo Calendar or Event Id and vice versa
@@ -56,7 +52,7 @@ public class CorrespondenceService implements Serializable {
    * @param exchangeId
    * @throws Exception
    */
-  protected void setCorrespondingId(String username, String exoId, String exchangeId) throws Exception {
+  public void setCorrespondingId(String username, String exoId, String exchangeId) throws Exception {
     String oldExoId = getCorrespondingId(username, exchangeId);
     String oldExchangeId = getCorrespondingId(username, exoId);
     if ((oldExoId != null && !oldExoId.equals(exoId)) || (oldExchangeId != null && !oldExchangeId.equals(exchangeId))) {
@@ -81,14 +77,14 @@ public class CorrespondenceService implements Serializable {
    * @param exoId
    * @throws Exception
    */
-  protected void deleteCorrespondingId(String username, String exchangeId, String exoId) throws Exception {
+  public void deleteCorrespondingId(String username, String exchangeId, String exoId) throws Exception {
     Properties properties = loadCorrespondenceProperties(username);
     properties.remove(exchangeId);
     properties.remove(exoId);
     saveProperties(username, properties);
   }
 
-  protected void deleteCorrespondingId(String username, String id) throws Exception {
+  public void deleteCorrespondingId(String username, String id) throws Exception {
     Properties properties = loadCorrespondenceProperties(username);
     String secondId = properties.getProperty(id);
     if (secondId != null) {
@@ -98,7 +94,7 @@ public class CorrespondenceService implements Serializable {
     }
   }
 
-  protected List<String> getSynchronizedExchangeFolderIds(String username) throws Exception {
+  public List<String> getSynchronizedExchangeFolderIds(String username) throws Exception {
     Properties properties = loadCorrespondenceProperties(username);
     List<String> folderIds = new ArrayList<>();
     @SuppressWarnings("unchecked")
@@ -115,8 +111,8 @@ public class CorrespondenceService implements Serializable {
   private void saveProperties(String username, Properties properties) throws Exception {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     properties.store(out, "");
-    SessionProvider sessionProvider = providerService.getSystemSessionProvider(null);
-    Node node = hierarchyCreator.getUserApplicationNode(sessionProvider, username);
+    SessionProvider sessionProvider = getSessionProviderService().getSystemSessionProvider(null);
+    Node node = getHierarchyCreator().getUserApplicationNode(sessionProvider, username);
     if (node == null) {
       throw new IllegalStateException("User application node not found. Please fix this and try later.");
     }
@@ -138,8 +134,8 @@ public class CorrespondenceService implements Serializable {
       properties = new Properties();
 
       // Load properties from JCR
-      SessionProvider sessionProvider = providerService.getSystemSessionProvider(null);
-      Node node = hierarchyCreator.getUserApplicationNode(sessionProvider, username);
+      SessionProvider sessionProvider = getSessionProviderService().getSystemSessionProvider(null);
+      Node node = getHierarchyCreator().getUserApplicationNode(sessionProvider, username);
       if (node == null) {
         throw new IllegalStateException("User application node not found. Please fix this and try later.");
       }
@@ -154,4 +150,17 @@ public class CorrespondenceService implements Serializable {
     return properties;
   }
 
+  public NodeHierarchyCreator getHierarchyCreator() {
+    if (hierarchyCreator == null) {
+      hierarchyCreator = CommonsUtils.getService(NodeHierarchyCreator.class);
+    }
+    return hierarchyCreator;
+  }
+
+  public SessionProviderService getSessionProviderService() {
+    if (sessionProviderService == null) {
+      sessionProviderService = CommonsUtils.getService(SessionProviderService.class);
+    }
+    return sessionProviderService;
+  }
 }

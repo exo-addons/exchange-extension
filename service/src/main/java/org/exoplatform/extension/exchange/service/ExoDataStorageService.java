@@ -1,12 +1,13 @@
 package org.exoplatform.extension.exchange.service;
 
+import static org.exoplatform.extension.exchange.service.util.CalendarConverterUtils.*;
+
 import java.io.Serializable;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
+import javax.jcr.*;
 import javax.jcr.query.*;
 
 import org.exoplatform.calendar.service.Calendar;
@@ -15,9 +16,9 @@ import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
 import org.exoplatform.calendar.util.Constants;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.ISO8601;
 import org.exoplatform.extension.exchange.listener.CalendarCreateUpdateAction;
-import org.exoplatform.extension.exchange.service.util.CalendarConverterUtils;
 import org.exoplatform.services.jcr.ext.common.SessionProvider;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -26,6 +27,7 @@ import org.exoplatform.services.organization.OrganizationService;
 import microsoft.exchange.webservices.data.core.PropertySet;
 import microsoft.exchange.webservices.data.core.enumeration.property.BasePropertySet;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceObjectPropertyException;
+import microsoft.exchange.webservices.data.core.exception.service.remote.ServiceRemoteException;
 import microsoft.exchange.webservices.data.core.service.folder.Folder;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
@@ -34,27 +36,23 @@ import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema
  * @author Boubaker Khanfir
  */
 @SuppressWarnings("all")
-public class ExoStorageService implements Serializable {
+public class ExoDataStorageService implements Serializable {
   private static final String           EXO_DATETIME_PROPERTY         = "exo:datetime";
 
   private static final long             serialVersionUID              = 6614108102985034995L;
 
-  private static final Log              LOG                           = ExoLogger.getLogger(ExoStorageService.class);
+  private static final Log              LOG                           = ExoLogger.getLogger(ExoDataStorageService.class);
 
   @SuppressWarnings("all")
   private static final DateFormat       EXCLUDE_ID_FORMAT_FIRST_CHARS = new SimpleDateFormat("yyyyMMdd");
 
-  private transient JCRDataStorage      storage;
+  private transient JCRDataStorage      exoCalendarDataStorage;
 
   private transient OrganizationService organizationService;
 
   private CorrespondenceService         correspondenceService;
 
-  public ExoStorageService(OrganizationService organizationService,
-                           CalendarService calendarService,
-                           CorrespondenceService correspondenceService) {
-    this.storage = ((CalendarServiceImpl) calendarService).getDataStorage();
-    this.organizationService = organizationService;
+  public ExoDataStorageService(CorrespondenceService correspondenceService) {
     this.correspondenceService = correspondenceService;
   }
 
@@ -89,30 +87,32 @@ public class ExoStorageService implements Serializable {
 
     if ((calendarEvent.getRepeatType() == null || calendarEvent.getRepeatType().equals(CalendarEvent.RP_NOREPEAT))
         && (calendarEvent.getIsExceptionOccurrence() == null || !calendarEvent.getIsExceptionOccurrence())) {
-      if (LOG.isTraceEnabled()) {
-        LOG.debug("DELETE user calendar event: " + calendarEvent.getSummary());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DELETE user calendar event: {} with id {}", calendarEvent.getSummary(), calendarEvent.getId());
       }
-      storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
+      getExoCalendarDataStorage().removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     } else if (calendarEvent.getIsExceptionOccurrence() != null && calendarEvent.getIsExceptionOccurrence()) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE user calendar event exceptional occurence: " + calendarEvent.getSummary() + ", id="
-            + calendarEvent.getRecurrenceId());
+        LOG.debug("DELETE user calendar event exceptional occurence: {}, id {}",
+                  calendarEvent.getSummary(),
+                  calendarEvent.getRecurrenceId());
       }
-      storage.removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
+      getExoCalendarDataStorage().removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     } else if (calendarEvent.getRecurrenceId() != null && !calendarEvent.getRecurrenceId().isEmpty()) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE user calendar event occurence from series: " + calendarEvent.getSummary() + " with id : "
-            + calendarEvent.getRecurrenceId());
+        LOG.debug("DELETE user calendar event occurence from series: {} with id : ",
+                  calendarEvent.getSummary(),
+                  calendarEvent.getRecurrenceId());
       }
-      storage.removeOccurrenceInstance(username, calendarEvent);
+      getExoCalendarDataStorage().removeOccurrenceInstance(username, calendarEvent);
     } else {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE user calendar event series: " + calendarEvent.getSummary());
+        LOG.debug("DELETE user calendar event series: {} with id {}", calendarEvent.getSummary(), calendarEvent.getId());
       }
-      storage.removeRecurrenceSeries(username, calendarEvent);
+      getExoCalendarDataStorage().removeRecurrenceSeries(username, calendarEvent);
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     }
@@ -130,7 +130,7 @@ public class ExoStorageService implements Serializable {
   public boolean deleteCalendar(String username, String folderId) throws Exception {
     String calendarId = correspondenceService.getCorrespondingId(username, folderId);
     if (calendarId == null) {
-      calendarId = CalendarConverterUtils.getCalendarId(folderId);
+      calendarId = getCalendarId(folderId);
     }
     List<CalendarEvent> events = getUserCalendarEvents(username, folderId);
     if (events == null) {
@@ -139,7 +139,7 @@ public class ExoStorageService implements Serializable {
     for (CalendarEvent calendarEvent : events) {
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     }
-    storage.removeUserCalendar(username, calendarId);
+    getExoCalendarDataStorage().removeUserCalendar(username, calendarId);
     correspondenceService.deleteCorrespondingId(username, folderId, calendarId);
     return true;
   }
@@ -169,7 +169,7 @@ public class ExoStorageService implements Serializable {
     String calendarId = correspondenceService.getCorrespondingId(username, folderId);
     Calendar calendar = null;
     if (calendarId != null) {
-      calendar = storage.getUserCalendar(username, calendarId);
+      calendar = getExoCalendarDataStorage().getUserCalendar(username, calendarId);
       if (calendar == null && deleteIfCorrespondentExists) {
         correspondenceService.deleteCorrespondingId(username, folderId);
       }
@@ -188,28 +188,28 @@ public class ExoStorageService implements Serializable {
    */
   public Calendar getOrCreateUserCalendar(String username, Folder folder) throws Exception {
     Calendar calendar = getUserCalendar(username, folder.getId().getUniqueId(), false);
-    String calendarId = CalendarConverterUtils.getCalendarId(folder.getId().getUniqueId());
+    String calendarId = getCalendarId(folder.getId().getUniqueId());
     if (calendar == null) {
-      Calendar tmpCalendar = storage.getUserCalendar(username, calendarId);
+      Calendar tmpCalendar = getExoCalendarDataStorage().getUserCalendar(username, calendarId);
       if (tmpCalendar != null) {
         // Renew Calendar
-        storage.removeUserCalendar(username, calendarId);
+        getExoCalendarDataStorage().removeUserCalendar(username, calendarId);
       }
     }
     if (calendar == null) {
-      if (LOG.isTraceEnabled()) {
-        LOG.debug("CREATE user calendar from Exchange: " + folder.getDisplayName());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("CREATE user calendar from Exchange: {}", folder.getDisplayName());
       }
 
       calendar = new Calendar();
       calendar.setId(calendarId);
-      calendar.setName(CalendarConverterUtils.getCalendarName(folder.getDisplayName()));
+      calendar.setName(getCalendarName(folder.getDisplayName()));
       calendar.setCalendarOwner(username);
       calendar.setDataInit(false);
       calendar.setEditPermission(new String[] { "any read" });
       calendar.setCalendarColor(Constants.COLORS[(int) (Math.random() * Constants.COLORS.length)]);
 
-      storage.saveUserCalendar(username, calendar, true);
+      getExoCalendarDataStorage().saveUserCalendar(username, calendar, true);
 
       // Set IDs correspondence
       correspondenceService.setCorrespondingId(username, calendar.getId(), folder.getId().getUniqueId());
@@ -229,13 +229,13 @@ public class ExoStorageService implements Serializable {
     List<CalendarEvent> userEvents = null;
     String calendarId = correspondenceService.getCorrespondingId(username, folderId);
     if (calendarId == null) {
-      calendarId = CalendarConverterUtils.getCalendarId(folderId);
+      calendarId = getCalendarId(folderId);
     }
-    Calendar calendar = storage.getUserCalendar(username, calendarId);
+    Calendar calendar = getExoCalendarDataStorage().getUserCalendar(username, calendarId);
     if (calendar != null) {
       List<String> calendarIds = new ArrayList<>();
       calendarIds.add(calendarId);
-      userEvents = storage.getUserEventByCalendar(username, calendarIds);
+      userEvents = getExoCalendarDataStorage().getUserEventByCalendar(username, calendarIds);
     }
     return userEvents;
   }
@@ -271,7 +271,8 @@ public class ExoStorageService implements Serializable {
    * @throws Exception
    */
   public List<CalendarEvent> createOrUpdateEvent(Appointment appointment, String username) throws Exception {
-    boolean isNew = correspondenceService.getCorrespondingId(username, appointment.getId().getUniqueId()) == null;
+    String exoEventId = correspondenceService.getCorrespondingId(username, appointment.getId().getUniqueId());
+    boolean isNew = exoEventId == null;
     if (!isNew) {
       CalendarEvent event = getEventByAppointmentId(username, appointment.getId().getUniqueId());
       if (event == null) {
@@ -279,7 +280,13 @@ public class ExoStorageService implements Serializable {
         correspondenceService.deleteCorrespondingId(username, appointment.getId().getUniqueId());
       }
     }
-    return createOrUpdateEvent(appointment, username, isNew);
+
+    try {
+      return createOrUpdateEvent(appointment, username, isNew);
+    } catch (ServiceRemoteException e) {
+      // Reattempt saving event if the connection is interrupted
+      return createOrUpdateEvent(appointment, username, isNew);
+    }
   }
 
   /**
@@ -290,7 +297,7 @@ public class ExoStorageService implements Serializable {
    */
   public CalendarEvent getEventByAppointmentId(String username, String appointmentId) throws Exception {
     String calEventId = correspondenceService.getCorrespondingId(username, appointmentId);
-    CalendarEvent event = storage.getEvent(username, calEventId);
+    CalendarEvent event = getExoCalendarDataStorage().getEvent(username, calEventId);
     if (event == null && calEventId != null) {
       correspondenceService.deleteCorrespondingId(username, appointmentId);
     }
@@ -303,7 +310,7 @@ public class ExoStorageService implements Serializable {
    * @throws Exception
    */
   public CalendarEvent getExoEventByNode(Node eventNode) throws Exception {
-    return storage.getEvent(eventNode);
+    return getExoCalendarDataStorage().getEvent(eventNode);
   }
 
   /**
@@ -312,7 +319,7 @@ public class ExoStorageService implements Serializable {
    * @throws Exception
    */
   public String getExoEventMasterRecurenceByOriginalUUID(String uuid) throws Exception {
-    Node node = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(uuid);
+    Node node = getExoCalendarDataStorage().getSession(SessionProvider.createSystemProvider()).getNodeByUUID(uuid);
     if (node == null) {
       if (LOG.isTraceEnabled()) {
         LOG.trace("No original recurrent node was found with UUID: " + uuid);
@@ -331,7 +338,7 @@ public class ExoStorageService implements Serializable {
    */
   public List<CalendarEvent> getAllExoEvents(String username, Calendar calendar) throws Exception {
     List<String> calendarIds = Collections.singletonList(calendar.getId());
-    return storage.getUserEventByCalendar(username, calendarIds);
+    return getExoCalendarDataStorage().getUserEventByCalendar(username, calendarIds);
   }
 
   /**
@@ -342,7 +349,7 @@ public class ExoStorageService implements Serializable {
    * @throws Exception
    */
   public List<CalendarEvent> findExoEventsModifiedSince(String username, Calendar calendar, Date date) throws Exception {
-    Node calendarHome = storage.getUserCalendarHome(username);
+    Node calendarHome = getExoCalendarDataStorage().getUserCalendarHome(username);
     if (calendarHome.hasNode(calendar.getId())) {
       calendarHome = calendarHome.getNode(calendar.getId());
     }
@@ -352,16 +359,20 @@ public class ExoStorageService implements Serializable {
   }
 
   public void updateModifiedDateOfEvent(String username, CalendarEvent event, Date lastModifiedTime) throws Exception {
-    Node node = storage.getCalendarEventNode(username, event.getCalType(), event.getCalendarId(), event.getId());
+    Node node = getExoCalendarDataStorage().getCalendarEventNode(username,
+                                                                 event.getCalType(),
+                                                                 event.getCalendarId(),
+                                                                 event.getId());
     modifyUpdateDate(node, lastModifiedTime);
     if (event.getOriginalReference() != null && !event.getOriginalReference().isEmpty()) {
-      Node masterNode = storage.getSession(SessionProvider.createSystemProvider()).getNodeByUUID(event.getOriginalReference());
+      Node masterNode = getExoCalendarDataStorage().getSession(SessionProvider.createSystemProvider())
+                                                   .getNodeByUUID(event.getOriginalReference());
       modifyUpdateDate(masterNode, lastModifiedTime);
     }
   }
 
   public CalendarEvent getEvent(String eventId, String username) throws Exception {
-    return storage.getEvent(username, eventId);
+    return getExoCalendarDataStorage().getEvent(username, eventId);
   }
 
   private List<CalendarEvent> getEventsByType(Node calendarHome, int type, java.util.Calendar date) throws Exception {
@@ -375,7 +386,7 @@ public class ExoStorageService implements Serializable {
     NodeIterator it = result.getNodes();
     CalendarEvent calEvent;
     while (it.hasNext()) {
-      calEvent = storage.getEvent(it.nextNode());
+      calEvent = getExoCalendarDataStorage().getEvent(it.nextNode());
       calEvent.setCalType(String.valueOf(type));
       events.add(calEvent);
     }
@@ -424,7 +435,7 @@ public class ExoStorageService implements Serializable {
             return updatedEvents;
           }
           updatedEvents.add(event);
-          if (CalendarConverterUtils.verifyModifiedDatesConflict(event, appointment)) {
+          if (verifyModifiedDatesConflict(event, appointment)) {
             if (LOG.isTraceEnabled()) {
               LOG.trace("Attempting to update eXo Event with Exchange Event, but modification date of eXo is after, ignore updating.");
             }
@@ -433,22 +444,30 @@ public class ExoStorageService implements Serializable {
         }
 
         if (LOG.isDebugEnabled()) {
+          String eventId = getEventId(appointment.getId().getUniqueId());
           if (isNew) {
-            LOG.debug("CREATE user calendar event: " + appointment.getSubject());
+            LOG.debug("CREATE user calendar event: {}, id: {}", appointment.getSubject(), eventId);
           } else {
-            LOG.debug("UPDATE user calendar event: " + appointment.getSubject());
+            LOG.debug("UPDATE user calendar event: {}, id: {}", appointment.getSubject(), eventId);
           }
         }
 
-        CalendarConverterUtils.convertExchangeToExoEvent(event,
-                                                         appointment,
-                                                         username,
-                                                         storage,
-                                                         organizationService.getUserHandler());
+        convertExchangeToExoEvent(event,
+                                  appointment,
+                                  username,
+                                  getExoCalendarDataStorage(),
+                                  getOrganizationService().getUserHandler());
         event.setRepeatType(CalendarEvent.RP_NOREPEAT);
         CalendarCreateUpdateAction.MODIFIED_DATE.set(getLastModifiedDate(appointment).getTime());
         try {
-          storage.saveUserEvent(username, calendar.getId(), event, isNew);
+          if (isNew) {
+            CalendarEvent storedEvent = getExoCalendarDataStorage().getEvent(username, event.getId());
+            isNew = storedEvent == null;
+          }
+
+          getExoCalendarDataStorage().saveUserEvent(username, calendar.getId(), event, isNew);
+        } catch (ItemExistsException e) {
+          LOG.warn("Event with id {} seems to exists already, ignore it", event.getId());
         } finally {
           CalendarCreateUpdateAction.MODIFIED_DATE.set(null);
         }
@@ -518,29 +537,30 @@ public class ExoStorageService implements Serializable {
                                        new PropertySet(BasePropertySet.FirstClassProperties));
         // End workaround
 
-        if (!isLastOccurenceDeleted && !isNew && CalendarConverterUtils.verifyModifiedDatesConflict(masterEvent, appointment)) {
+        if (!isLastOccurenceDeleted && !isNew && verifyModifiedDatesConflict(masterEvent, appointment)) {
           if (LOG.isTraceEnabled()) {
             LOG.trace("Attempting to update eXo Event with Exchange Event, but modification date of eXo is after, ignore updating.");
           }
           return updatedEvents;
         } else {
-          if (LOG.isTraceEnabled()) {
+          if (LOG.isDebugEnabled()) {
+            String eventId = getEventId(appointment.getId().getUniqueId());
             if (isNew) {
-              LOG.debug("CREATE recurrent user calendar event: " + appointment.getSubject());
+              LOG.debug("CREATE recurrent user calendar event: {} with id {}", appointment.getSubject(), eventId);
             } else {
-              LOG.debug("UPDATE recurrent user calendar event: " + appointment.getSubject());
+              LOG.debug("UPDATE recurrent user calendar event: {} with id {}", appointment.getSubject(), eventId);
             }
           }
 
           masterEvent.setCalendarId(calendar.getId());
-          CalendarConverterUtils.convertExchangeToExoMasterRecurringCalendarEvent(masterEvent,
-                                                                                  appointment,
-                                                                                  username,
-                                                                                  storage,
-                                                                                  organizationService.getUserHandler());
+          convertExchangeToExoMasterRecurringCalendarEvent(masterEvent,
+                                                           appointment,
+                                                           username,
+                                                           getExoCalendarDataStorage(),
+                                                           getOrganizationService().getUserHandler());
           if (isNew) {
             correspondenceService.setCorrespondingId(username, masterEvent.getId(), appointment.getId().getUniqueId());
-          } else if (!CalendarConverterUtils.isSameDate(orginialStartDate, masterEvent.getFromDateTime())) {
+          } else if (!isSameDate(orginialStartDate, masterEvent.getFromDateTime())) {
             if (masterEvent.getExceptionIds() == null) {
               masterEvent.setExceptionIds(new ArrayList<String>());
             }
@@ -548,7 +568,7 @@ public class ExoStorageService implements Serializable {
 
           CalendarCreateUpdateAction.MODIFIED_DATE.set(getLastModifiedDate(appointment).getTime());
           try {
-            storage.saveUserEvent(username, calendar.getId(), masterEvent, isNew);
+            getExoCalendarDataStorage().saveUserEvent(username, calendar.getId(), masterEvent, isNew);
           } finally {
             CalendarCreateUpdateAction.MODIFIED_DATE.set(null);
           }
@@ -556,24 +576,23 @@ public class ExoStorageService implements Serializable {
         List<CalendarEvent> exceptionalEventsToUpdate = new ArrayList<>();
         List<Appointment> occAppointments = new ArrayList<>();
         // Deleted execptional occurences events.
-        List<CalendarEvent> toDeleteEvents =
-                                           CalendarConverterUtils.convertExchangeToExoOccurenceEvent(masterEvent,
-                                                                                                     exceptionalEventsToUpdate,
-                                                                                                     occAppointments,
-                                                                                                     appointment,
-                                                                                                     username,
-                                                                                                     storage,
-                                                                                                     organizationService.getUserHandler(),
-                                                                                                     correspondenceService);
+        List<CalendarEvent> toDeleteEvents = convertExchangeToExoOccurenceEvent(masterEvent,
+                                                                                exceptionalEventsToUpdate,
+                                                                                occAppointments,
+                                                                                appointment,
+                                                                                username,
+                                                                                getExoCalendarDataStorage(),
+                                                                                getOrganizationService().getUserHandler(),
+                                                                                correspondenceService);
         if (exceptionalEventsToUpdate != null && !exceptionalEventsToUpdate.isEmpty()) {
           CalendarCreateUpdateAction.MODIFIED_DATE.set(getLastModifiedDate(appointment).getTime());
           try {
-            storage.updateOccurrenceEvent(calendar.getId(),
-                                          calendar.getId(),
-                                          masterEvent.getCalType(),
-                                          masterEvent.getCalType(),
-                                          exceptionalEventsToUpdate,
-                                          username);
+            getExoCalendarDataStorage().updateOccurrenceEvent(calendar.getId(),
+                                                              calendar.getId(),
+                                                              masterEvent.getCalType(),
+                                                              masterEvent.getCalType(),
+                                                              exceptionalEventsToUpdate,
+                                                              username);
           } finally {
             CalendarCreateUpdateAction.MODIFIED_DATE.set(null);
           }
@@ -614,5 +633,20 @@ public class ExoStorageService implements Serializable {
                                                                  new PropertySet(AppointmentSchema.LastModifiedTime));
       return appointmentWithModifiedDate.getLastModifiedTime();
     }
+  }
+
+  public OrganizationService getOrganizationService() {
+    if (this.organizationService == null) {
+      this.organizationService = CommonsUtils.getService(OrganizationService.class);
+    }
+    return organizationService;
+  }
+
+  public JCRDataStorage getExoCalendarDataStorage() {
+    if (this.exoCalendarDataStorage == null) {
+      CalendarService calendarService = CommonsUtils.getService(CalendarService.class);
+      this.exoCalendarDataStorage = ((CalendarServiceImpl) calendarService).getDataStorage();
+    }
+    return exoCalendarDataStorage;
   }
 }

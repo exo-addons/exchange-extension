@@ -1,8 +1,7 @@
-package org.exoplatform.extension.exchange.service;
+package org.exoplatform.extension.exchange.task;
 
 import java.io.*;
 import java.security.KeyStore;
-import java.text.ParseException;
 import java.util.*;
 
 import javax.crypto.KeyGenerator;
@@ -15,9 +14,15 @@ import org.exoplatform.calendar.service.Calendar;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
+import org.exoplatform.commons.api.settings.SettingService;
+import org.exoplatform.commons.api.settings.SettingValue;
+import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.commons.api.settings.data.Scope;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.PropertyManager;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.container.component.ComponentRequestLifecycle;
+import org.exoplatform.extension.exchange.service.*;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterUtils;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -31,82 +36,102 @@ import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.PropertySet;
 import microsoft.exchange.webservices.data.core.enumeration.property.BasePropertySet;
 import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.enumeration.search.ItemTraversal;
+import microsoft.exchange.webservices.data.core.enumeration.search.SortDirection;
+import microsoft.exchange.webservices.data.core.enumeration.service.SyncFolderItemsScope;
+import microsoft.exchange.webservices.data.core.enumeration.sync.ChangeType;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
+import microsoft.exchange.webservices.data.core.exception.service.remote.ServiceRemoteException;
 import microsoft.exchange.webservices.data.core.service.folder.CalendarFolder;
 import microsoft.exchange.webservices.data.core.service.folder.Folder;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
 import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
 import microsoft.exchange.webservices.data.core.service.schema.ItemSchema;
 import microsoft.exchange.webservices.data.notification.ItemEvent;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
-import microsoft.exchange.webservices.data.property.complex.ItemId;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
 import microsoft.exchange.webservices.data.search.ItemView;
 import microsoft.exchange.webservices.data.search.filter.SearchFilter;
+import microsoft.exchange.webservices.data.sync.ChangeCollection;
+import microsoft.exchange.webservices.data.sync.ItemChange;
 
 /**
  * @author Boubaker KHANFIR
  */
 @SuppressWarnings("all")
-public class IntegrationService {
+public class UserIntegrationFacade {
 
-  private static final String                          GTN_KEY                               = "gtnKey";
+  private static final String                             GTN_KEY                               = "gtnKey";
 
-  private static final String                          GTN_STORE_PASS                        = "gtnStorePass";
+  private static final String                             GTN_STORE_PASS                        = "gtnStorePass";
 
-  public static final String                           USER_EXCHANGE_SERVER_URL_ATTRIBUTE    = "exchange.server.url";
+  public static final String                              USER_EXCHANGE_SERVER_URL_ATTRIBUTE    = "exchange.server.url";
 
-  public static final String                           USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE = "exchange.server.domain";
+  public static final String                              USER_EXCHANGE_SERVER_DOMAIN_ATTRIBUTE = "exchange.server.domain";
 
-  public static final String                           USER_EXCHANGE_USERNAME_ATTRIBUTE      = "exchange.username";
+  public static final String                              USER_EXCHANGE_USERNAME_ATTRIBUTE      = "exchange.username";
 
-  public static final String                           USER_EXCHANGE_PASSWORD_ATTRIBUTE      = "exchange.password";
+  public static final String                              USER_EXCHANGE_PASSWORD_ATTRIBUTE      = "exchange.password";
 
-  private final static Log                             LOG                                   =
-                                                           ExoLogger.getLogger(IntegrationService.class);
+  public static final Context                             USER_EXCHANGE_CONTEXT                 =
+                                                                                Context.GLOBAL.id("ADDONS_EXCHANGE_CALENDAR");
 
-  private static final String                          USER_EXCHANGE_HANDLED_ATTRIBUTE       = "exchange.check.date";
+  public static final Scope                               USER_EXCHANGE_SCOPE                   = Scope.APPLICATION;
 
-  private static final String                          USER_EXO_HANDLED_ATTRIBUTE            = "exo.check.date";
+  public static final String                              USER_EXCHANGE_SYNC_STATE_KEY          = "ADDONS_EXCHANGE_SYNC_STATE";
 
-  private static final Map<String, IntegrationService> instances                             =
-                                                                 new HashMap<String, IntegrationService>();
+  private final static Log                                LOG                                   =
+                                                              ExoLogger.getLogger(UserIntegrationFacade.class);
 
-  private static AbstractCodec                         codec;
+  private static final String                             USER_EXO_HANDLED_ATTRIBUTE            = "exo.check.date";
 
-  private final String                                 username;
+  private static final Map<String, UserIntegrationFacade> instances                             =
+                                                                    new HashMap<String, UserIntegrationFacade>();
 
-  private final ExchangeService                        service;
+  private static AbstractCodec                            codec;
 
-  private final ExoStorageService                      exoStorageService;
+  private final String                                    username;
 
-  private final ExchangeStorageService                 exchangeStorageService;
+  private final int                                       maxFirstSynchronizationDays;
 
-  private final CorrespondenceService                  correspondenceService;
+  private final ExchangeService                           service;
 
-  private final OrganizationService                    organizationService;
+  private final ExoDataStorageService                     exoStorageService;
 
-  private final CalendarService                        calendarService;
+  private final ExchangeDataStorageService                exchangeStorageService;
 
-  private boolean                                      synchIsCurrentlyRunning               = false;
+  private final CorrespondenceService                     correspondenceService;
 
-  public IntegrationService(OrganizationService organizationService,
-                            CalendarService calendarService,
-                            ExoStorageService exoStorageService,
-                            ExchangeStorageService exchangeStorageService,
-                            CorrespondenceService correspondenceService,
-                            ExchangeService service,
-                            String username) {
-    this.organizationService = organizationService;
+  private final CalendarService                           calendarService;
+
+  private SettingService                                  settingService;
+
+  private boolean                                         synchIsCurrentlyRunning               = false;
+
+  private Date                                            firstSynchronizationUntilDate;
+
+  public UserIntegrationFacade(CalendarService calendarService,
+                               ExoDataStorageService exoStorageService,
+                               ExchangeDataStorageService exchangeStorageService,
+                               CorrespondenceService correspondenceService,
+                               ExchangeService service,
+                               String username,
+                               int maxFirstSynchronizationDays) {
     this.calendarService = calendarService;
     this.exoStorageService = exoStorageService;
     this.exchangeStorageService = exchangeStorageService;
     this.correspondenceService = correspondenceService;
     this.service = service;
     this.username = username;
+    this.maxFirstSynchronizationDays = maxFirstSynchronizationDays;
 
     // Set corresponding service to each username.
     instances.put(username, this);
+
+    java.util.Calendar untilCalendarDate = java.util.Calendar.getInstance();
+    untilCalendarDate.add(java.util.Calendar.DATE, -maxFirstSynchronizationDays);
+    firstSynchronizationUntilDate = untilCalendarDate.getTime();
   }
 
   /**
@@ -115,7 +140,7 @@ public class IntegrationService {
    * @param username
    * @return
    */
-  public static IntegrationService getInstance(String username) {
+  public static UserIntegrationFacade getInstance(String username) {
     return instances.get(username);
   }
 
@@ -132,6 +157,7 @@ public class IntegrationService {
    * Synchronize Exchange Calendar identified by 'folderId' with eXo Calendar.
    * 
    * @param folderId
+   * 
    * @throws Exception
    * @return List of event IDs
    */
@@ -139,14 +165,129 @@ public class IntegrationService {
     List<String> updatedExoEventIds = new ArrayList<String>();
     CalendarFolder folder = exchangeStorageService.getExchangeCalendar(service, folderId);
 
-    // Create Calendar if not present
-    exoStorageService.getOrCreateUserCalendar(username, folder);
+    Calendar exoCalendar = exoStorageService.getUserCalendar(username, folder.getId().getUniqueId());
+    boolean isNewCalendar = exoCalendar == null;
 
-    Iterable<Item> items = searchAllItems(folderId);
-    synchronizeAllExchangeAppointments(updatedExoEventIds, items);
-    deleteExoEventsOutOfSynchronization(folderId);
+    String syncState = getSynchState(folderId);
+    if (syncState == null || isNewCalendar) {
+      LOG.debug("Start full exchange calendar synchronization for folderId {} until date {}",
+                folderId.getUniqueId(),
+                firstSynchronizationUntilDate);
+
+      Date lastSynchronizedDate = null;
+
+      // Create Calendar if not present
+      exoStorageService.getOrCreateUserCalendar(username, folder);
+
+      int offset = 0;
+      int pageSize = 30;
+
+      ItemView view = new ItemView(pageSize);
+      view.setPropertySet(new PropertySet(BasePropertySet.FirstClassProperties));
+      view.getOrderBy().add(AppointmentSchema.Start, SortDirection.Descending);
+      view.setTraversal(ItemTraversal.Shallow);
+
+      // Synchronize all events
+      ChangeCollection<ItemChange> changeCollection = service.syncFolderItems(folderId,
+                                                                              PropertySet.FirstClassProperties,
+                                                                              null,
+                                                                              1,
+                                                                              SyncFolderItemsScope.NormalItems,
+                                                                              syncState);
+      syncState = changeCollection.getSyncState();
+
+      while (true) {
+        FindItemsResults<Item> results = null;
+        try {
+          results = getItems(folderId, view);
+        } catch (ServiceRemoteException e) {
+          results = getItems(folderId, view);
+        }
+
+        lastSynchronizedDate = synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
+        if (!results.isMoreAvailable() || firstSynchronizationUntilDate.after(lastSynchronizedDate)) {
+          break;
+        }
+
+        offset += pageSize;
+        view.setOffset(offset);
+      }
+
+      LOG.debug("Full exchange calendar synchronization processed successfully for folderId {}, last synchronized event start date: {}",
+                folderId.getUniqueId(),
+                lastSynchronizedDate == null ? "" : lastSynchronizedDate);
+      setSynchState(folderId, syncState);
+    } else {
+      LOG.debug("Synchronize last modified events since last synchronization");
+
+      int countModifiedItems = synchronizeExchangeAppointementsByState(folderId, updatedExoEventIds);
+
+      LOG.debug("First synchronization is finished with {} modified/created events", countModifiedItems);
+    }
 
     return updatedExoEventIds;
+  }
+
+  private int synchronizeExchangeAppointementsByState(FolderId folderId, List<String> updatedExoEventIds) throws Exception {
+    String syncState = getSynchState(folderId);
+    ChangeCollection<ItemChange> changeCollection = service.syncFolderItems(folderId,
+                                                                            PropertySet.FirstClassProperties,
+                                                                            null,
+                                                                            512,
+                                                                            SyncFolderItemsScope.NormalItems,
+                                                                            syncState);
+    syncState = changeCollection.getSyncState();
+    int countModifiedItems = changeCollection.getCount();
+
+    List<Item> modifiedItems = new ArrayList<>();
+    Iterator<ItemChange> changeIterator = changeCollection.iterator();
+    while (changeIterator.hasNext()) {
+      ItemChange action = (ItemChange) changeIterator.next();
+      Item item = action.getItem();
+      if (item instanceof Appointment) {
+        if (ChangeType.Create.equals(action.getChangeType()) || ChangeType.Update.equals(action.getChangeType())) {
+          modifiedItems.add(item);
+        } else if (ChangeType.Delete.equals(action.getChangeType())) {
+          String itemId = item.getId().getUniqueId();
+          checkAndDeleteExoEvent(itemId);
+        }
+      }
+    }
+
+    if (!modifiedItems.isEmpty()) {
+      synchronizeExchangeAppointments(updatedExoEventIds, modifiedItems);
+    }
+    setSynchState(folderId, syncState);
+    return countModifiedItems;
+  }
+
+  public void checkAndDeleteExoEvent(String itemId) throws Exception {
+    String eventId = correspondenceService.getCorrespondingId(username, itemId);
+    CalendarEvent calendarEvent = exoStorageService.getEvent(eventId, username);
+    if (calendarEvent != null) {
+      exoStorageService.deleteEvent(username, calendarEvent);
+    }
+  }
+
+  private void setSynchState(FolderId folderId, String syncState) {
+    getSettingService().set(USER_EXCHANGE_CONTEXT,
+                            USER_EXCHANGE_SCOPE.id(folderId.getUniqueId()),
+                            USER_EXCHANGE_SYNC_STATE_KEY,
+                            SettingValue.create(syncState));
+  }
+
+  public String getSynchState(FolderId folderId) {
+    SettingValue<?> settingValue = getSettingService().get(USER_EXCHANGE_CONTEXT,
+                                                           USER_EXCHANGE_SCOPE.id(folderId.getUniqueId()),
+                                                           USER_EXCHANGE_SYNC_STATE_KEY);
+    return settingValue == null || settingValue.getValue() == null ? null : settingValue.getValue().toString();
+  }
+
+  public SettingService getSettingService() {
+    if (settingService == null) {
+      settingService = CommonsUtils.getService(SettingService.class);
+    }
+    return settingService;
   }
 
   /**
@@ -154,22 +295,14 @@ public class IntegrationService {
    * The check is done for events modified since 'lastSyncDate'.
    * 
    * @param folderId
-   * @param lastSyncDate
+   * @param exoLastSyncDate
    * @param updatedExoEventIDs
    * @throws Exception
    */
   public void synchronizeModificationsOfCalendar(FolderId folderId,
-                                                 Date lastSyncDate,
+                                                 Date exoLastSyncDate,
                                                  List<String> updatedExoEventIDs) throws Exception {
-    // Serach modified eXo Calendar events since this date, this is used to
-    // force synchronization
-    Date exoLastSyncDate = getUserExoLastCheckDate();
-    if (exoLastSyncDate == null || exoLastSyncDate.before(lastSyncDate)) {
-      exoLastSyncDate = lastSyncDate;
-    }
-
-    synchronizeAppointmentsByModificationDate(folderId, lastSyncDate, updatedExoEventIDs);
-    synchronizeNewExoEvents(folderId, updatedExoEventIDs, exoLastSyncDate);
+    synchronizeExchangeAppointementsByState(folderId, updatedExoEventIDs);
     synchronizeExoEventsByModificationDate(folderId, updatedExoEventIDs, exoLastSyncDate);
   }
 
@@ -210,11 +343,10 @@ public class IntegrationService {
    * state in Exchange.
    * 
    * @param itemEvent
-   * @param lastSyncDate
    * @return
    * @throws Exception
    */
-  public List<CalendarEvent> createOrUpdateOrDelete(ItemEvent itemEvent, Date lastSyncDate) throws Exception {
+  public List<CalendarEvent> createOrUpdateOrDelete(ItemEvent itemEvent) throws Exception {
     List<CalendarEvent> updatedEvents = null;
 
     Item item = exchangeStorageService.getItem(service, itemEvent.getItemId());
@@ -223,7 +355,6 @@ public class IntegrationService {
     } else if (item instanceof Appointment) {
       Appointment appointment = (Appointment) item;
       String eventId = correspondenceService.getCorrespondingId(username, appointment.getId().getUniqueId());
-      long diff = lastSyncDate.getTime() - item.getLastModifiedTime().getTime();
       if (eventId == null) {
         updatedEvents = exoStorageService.createEvent(appointment, username);
       } else {
@@ -449,10 +580,10 @@ public class IntegrationService {
   private void deleteExoEventsOutOfSynchronization(FolderId folderId) throws Exception {
     List<CalendarEvent> events = exoStorageService.getUserCalendarEvents(username, folderId.getUniqueId());
     for (CalendarEvent calendarEvent : events) {
-      if (correspondenceService.getCorrespondingId(username, calendarEvent.getId()) == null) {
+      String itemId = correspondenceService.getCorrespondingId(username, calendarEvent.getId());
+      if (itemId == null) {
         exoStorageService.deleteEvent(username, calendarEvent);
       } else {
-        String itemId = correspondenceService.getCorrespondingId(username, calendarEvent.getId());
         Item item = exchangeStorageService.getItem(service, itemId);
         if (item == null) {
           exoStorageService.deleteEvent(username, calendarEvent);
@@ -461,10 +592,16 @@ public class IntegrationService {
     }
   }
 
-  private void synchronizeAllExchangeAppointments(List<String> eventIds, Iterable<Item> items) throws Exception,
-                                                                                               ServiceLocalException {
+  private Date synchronizeExchangeAppointments(List<String> eventIds, Iterable<Item> items) throws Exception,
+                                                                                            ServiceLocalException {
+    Date lastSynchronizedDate = null;
     for (Item item : items) {
       if (item instanceof Appointment) {
+        Appointment appointment = (Appointment) item;
+        if (lastSynchronizedDate == null || lastSynchronizedDate.before(appointment.getStart())) {
+          lastSynchronizedDate = appointment.getStart();
+        }
+
         List<CalendarEvent> updatedEvents = exoStorageService.createOrUpdateEvent((Appointment) item, username);
         if (updatedEvents != null && !updatedEvents.isEmpty()) {
           for (CalendarEvent calendarEvent : updatedEvents) {
@@ -475,65 +612,7 @@ public class IntegrationService {
         LOG.warn("Item bound from exchange but not of type 'Appointment':" + item.getItemClass());
       }
     }
-  }
-
-  /**
-   * Sets exo and exchange last check full synchronization operation date
-   * 
-   * @param time
-   * @throws Exception
-   */
-  public void setUserLastCheckDate(long time) throws Exception {
-    if (LOG.isTraceEnabled()) {
-      LOG.trace("Set last time check of modified eXChange appointments to '{}.{}' for user {}",
-                new Date(time),
-                time % 1000,
-                username);
-    }
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
-    }
-    try {
-      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-      userProfile.setAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE, String.valueOf(time));
-
-      Date savedTime = getUserExoLastCheckDate();
-      if (time > savedTime.getTime()) {
-        setUserExoLastCheckDate(time);
-      }
-      organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
-    } finally {
-      if (organizationService instanceof ComponentRequestLifecycle) {
-        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-      }
-    }
-  }
-
-  /**
-   * Gets last check full synchronization operation date
-   * 
-   * @return
-   * @throws Exception
-   */
-  public Date getUserLastCheckDate() throws Exception {
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
-    }
-    try {
-      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-      long time =
-                userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE) == null ? 0
-                                                                                  : Long.valueOf(userProfile.getAttribute(USER_EXCHANGE_HANDLED_ATTRIBUTE));
-      Date lastSyncDate = null;
-      if (time > 0) {
-        lastSyncDate = new Date(time);
-      }
-      return lastSyncDate;
-    } finally {
-      if (organizationService instanceof ComponentRequestLifecycle) {
-        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-      }
-    }
+    return lastSynchronizedDate;
   }
 
   /**
@@ -543,31 +622,13 @@ public class IntegrationService {
    * @throws Exception
    */
   public void setUserExoLastCheckDate(long time) throws Exception {
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
-    }
-
     if (LOG.isTraceEnabled()) {
       LOG.trace("Set last time check for modified exo events to '{}.{}' for user {}", new Date(time), time % 1000, username);
     }
-    try {
-      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-      long savedTime =
-                     userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0
-                                                                                  : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-      if (savedTime > 0) {
-        userProfile.setAttribute(USER_EXO_HANDLED_ATTRIBUTE, String.valueOf(time));
-        organizationService.getUserProfileHandler().saveUserProfile(userProfile, false);
-      } else if (LOG.isTraceEnabled()) {
-        LOG.trace("User '" + username
-            + "' exo last check time was not set before, may be the synhronization was not run before or an error occured in the meantime.");
-      }
-
-    } finally {
-      if (organizationService instanceof ComponentRequestLifecycle) {
-        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-      }
-    }
+    getSettingService().set(USER_EXCHANGE_CONTEXT,
+                            USER_EXCHANGE_SCOPE.id(username),
+                            USER_EXO_HANDLED_ATTRIBUTE,
+                            SettingValue.create(String.valueOf(time)));
   }
 
   /**
@@ -577,24 +638,14 @@ public class IntegrationService {
    * @throws Exception
    */
   public Date getUserExoLastCheckDate() throws Exception {
-    if (organizationService instanceof ComponentRequestLifecycle) {
-      ((ComponentRequestLifecycle) organizationService).startRequest(PortalContainer.getInstance());
+    SettingValue<?> settingValue = getSettingService().get(USER_EXCHANGE_CONTEXT,
+                                                           USER_EXCHANGE_SCOPE.id(username),
+                                                           USER_EXO_HANDLED_ATTRIBUTE);
+    if (settingValue == null || settingValue.getValue() == null) {
+      return null;
     }
-    try {
-      UserProfile userProfile = organizationService.getUserProfileHandler().findUserProfileByName(username);
-      long time =
-                userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE) == null ? 0
-                                                                             : Long.valueOf(userProfile.getAttribute(USER_EXO_HANDLED_ATTRIBUTE));
-      Date lastSyncDate = null;
-      if (time > 0) {
-        lastSyncDate = new Date(time);
-      }
-      return lastSyncDate;
-    } finally {
-      if (organizationService instanceof ComponentRequestLifecycle) {
-        ((ComponentRequestLifecycle) organizationService).endRequest(PortalContainer.getInstance());
-      }
-    }
+    long time = Long.parseLong(settingValue.getValue().toString());
+    return new Date(time);
   }
 
   /**
@@ -697,118 +748,13 @@ public class IntegrationService {
     }
   }
 
-  @SuppressWarnings("deprecation")
-  private void synchronizeNewExoEvents(FolderId folderId,
-                                       List<String> updatedExoEventIDs,
-                                       Date exoLastSyncDate) throws Exception {
-    // Search for existant Appointments in Exchange but not in eXo
-    Iterable<CalendarEvent> unsynchronizedEvents = searchUnsynchronizedAppointments(username, folderId.getUniqueId());
-    for (CalendarEvent calendarEvent : unsynchronizedEvents) {
-      // To not have redendance
-      if (updatedExoEventIDs != null && updatedExoEventIDs.contains(calendarEvent.getId())) {
-        continue;
-      }
-
-      if (calendarEvent.getLastUpdatedTime() != null) {
-        if (calendarEvent.getLastUpdatedTime().after(exoLastSyncDate)) {
-          String exoMasterId = null;
-          if (calendarEvent.getIsExceptionOccurrence() != null && calendarEvent.getIsExceptionOccurrence()) {
-            exoMasterId = exoStorageService.getExoEventMasterRecurenceByOriginalUUID(calendarEvent.getOriginalReference());
-            if (exoMasterId == null) {
-              LOG.error("No master Id was found for occurence: " + calendarEvent.getSummary() + " with recurrenceId = "
-                  + calendarEvent.getRecurrenceId() + ". The event will not be updated.");
-              continue;
-            }
-          }
-          boolean deleteEvent = exchangeStorageService.updateOrCreateExchangeAppointment(username,
-                                                                                         service,
-                                                                                         calendarEvent,
-                                                                                         exoMasterId,
-                                                                                         this::appointmentUpdated);
-          if (deleteEvent) {
-            exoStorageService.deleteEvent(username, calendarEvent);
-          }
-          if (updatedExoEventIDs != null) {
-            updatedExoEventIDs.add(calendarEvent.getId());
-          }
-        } else {
-          exoStorageService.deleteEvent(username, calendarEvent);
-        }
-      }
+  private FindItemsResults<Item> getItems(FolderId parentFolderId, ItemView view) throws Exception {
+    try {
+      return service.findItems(parentFolderId, view);
+    } catch (Exception e) {
+      LOG.warn("Error while paging results: page = " + view.getOffset() + " page size = " + view.getPageSize(), e);
     }
-  }
-
-  private void synchronizeAppointmentsByModificationDate(FolderId folderId,
-                                                         Date lastSyncDate,
-                                                         List<String> updatedExoEventIDs) throws Exception,
-                                                                                          ServiceLocalException,
-                                                                                          ParseException {
-    Iterable<Item> items = searchAllAppointmentsModifiedSince(folderId, lastSyncDate);
-    // Search for modified Appointments in Exchange, since last check date.
-    for (Item item : items) {
-      if (item instanceof Appointment) {
-        if (lastSyncDate != null && item.getLastModifiedTime() != null && item.getLastModifiedTime().before(lastSyncDate)) {
-          continue;
-        }
-        // Test if there is a modification conflict
-        CalendarEvent event = exoStorageService.getEventByAppointmentId(username, item.getId().getUniqueId());
-        if (event != null) {
-          if (updatedExoEventIDs != null && updatedExoEventIDs.contains(event.getId())) {
-            // Already updated by previous operation
-            continue;
-          }
-          @SuppressWarnings("deprecation")
-          long eventModifDate = event.getLastModified();
-          long itemModifDate = item.getLastModifiedTime().getTime();
-          if (itemModifDate > eventModifDate) {
-            List<CalendarEvent> updatedEvents = exoStorageService.updateEvent((Appointment) item, username);
-            if (updatedEvents != null && !updatedEvents.isEmpty() && updatedExoEventIDs != null) {
-              for (CalendarEvent calendarEvent : updatedEvents) {
-                updatedExoEventIDs.add(calendarEvent.getId());
-              }
-            }
-          }
-        } else {
-          List<CalendarEvent> updatedEvents = exoStorageService.createEvent((Appointment) item, username);
-          if (updatedEvents != null && !updatedEvents.isEmpty() && updatedExoEventIDs != null) {
-            for (CalendarEvent calendarEvent : updatedEvents) {
-              updatedExoEventIDs.add(calendarEvent.getId());
-            }
-          }
-        }
-      } else {
-        LOG.warn("Item bound from exchange but not of type 'Appointment':" + item.getItemClass());
-      }
-    }
-  }
-
-  private Iterable<CalendarEvent> searchUnsynchronizedAppointments(String username, String folderId) throws Exception {
-    List<CalendarEvent> calendarEvents = exoStorageService.getUserCalendarEvents(username, folderId);
-    Iterator<CalendarEvent> calendarEventsIterator = calendarEvents.iterator();
-    while (calendarEventsIterator.hasNext()) {
-      CalendarEvent calendarEvent = calendarEventsIterator.next();
-      String itemId = correspondenceService.getCorrespondingId(username, calendarEvent.getId());
-      if (itemId == null) {
-        // Item was detected, and will be created
-        continue;
-      }
-      Item item = exchangeStorageService.getItem(service, ItemId.getItemIdFromString(itemId));
-      if (item != null) {
-        calendarEventsIterator.remove();
-      }
-    }
-    return calendarEvents;
-  }
-
-  private List<Item> searchAllItems(FolderId parentFolderId) throws Exception {
-    ItemView view = new ItemView(1000);
-    view.setPropertySet(new PropertySet(BasePropertySet.FirstClassProperties));
-    FindItemsResults<Item> findResults = service.findItems(parentFolderId, view);
-    int totalCount = findResults.getTotalCount();
-    if (LOG.isTraceEnabled() && totalCount > 0) {
-      LOG.trace("Check all exchange calendar for user '{}', items found: {}", username, totalCount);
-    }
-    return findResults.getItems();
+    return null;
   }
 
   private List<CalendarEvent> searchCalendarEventsModifiedSince(Calendar calendar, Date date) throws Exception {
@@ -820,7 +766,7 @@ public class IntegrationService {
 
   private List<Item> searchAllAppointmentsModifiedSince(FolderId parentFolderId, Date date) throws Exception {
     if (date == null) {
-      return searchAllItems(parentFolderId);
+      throw new IllegalArgumentException("since date is null");
     }
 
     java.util.Calendar calendar = java.util.Calendar.getInstance();

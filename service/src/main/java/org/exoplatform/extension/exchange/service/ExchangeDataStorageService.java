@@ -9,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
 import org.exoplatform.calendar.service.impl.CalendarServiceImpl;
+import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.container.PortalContainer;
 import org.exoplatform.extension.exchange.service.util.CalendarConverterUtils;
 import org.exoplatform.services.log.ExoLogger;
@@ -36,17 +37,16 @@ import microsoft.exchange.webservices.data.search.FolderView;
  * @author Boubaker Khanfir
  */
 @SuppressWarnings("all")
-public class ExchangeStorageService implements Serializable {
+public class ExchangeDataStorageService implements Serializable {
   private static final long     serialVersionUID = 6348129698208975430L;
 
-  private static final Log      LOG              = ExoLogger.getLogger(ExchangeStorageService.class);
+  private static final Log      LOG              = ExoLogger.getLogger(ExchangeDataStorageService.class);
 
   private OrganizationService   organizationService;
 
   private CorrespondenceService correspondenceService;
 
-  public ExchangeStorageService(OrganizationService organizationService, CorrespondenceService correspondenceService) {
-    this.organizationService = organizationService;
+  public ExchangeDataStorageService(CorrespondenceService correspondenceService) {
     this.correspondenceService = correspondenceService;
   }
 
@@ -133,7 +133,7 @@ public class ExchangeStorageService implements Serializable {
         appointment = new Appointment(service);
       }
 
-      CalendarConverterUtils.convertExoToExchangeEvent(appointment, event, username, organizationService.getUserHandler());
+      CalendarConverterUtils.convertExoToExchangeEvent(appointment, event, username, getOrganizationService().getUserHandler());
     } else {
       if ((event.getRecurrenceId() != null && !event.getRecurrenceId().isEmpty())
           || (event.getIsExceptionOccurrence() != null && event.getIsExceptionOccurrence())) {
@@ -154,7 +154,7 @@ public class ExchangeStorageService implements Serializable {
         CalendarConverterUtils.convertExoToExchangeOccurenceEvent(appointment,
                                                                   event,
                                                                   username,
-                                                                  organizationService.getUserHandler());
+                                                                  getOrganizationService().getUserHandler());
       } else {
         if (isNew) {
           // Checks if this event was already in Exchange, if it's the case, it
@@ -171,7 +171,7 @@ public class ExchangeStorageService implements Serializable {
                                              CalendarConverterUtils.convertExoToExchangeMasterRecurringCalendarEvent(appointment,
                                                                                                                      event,
                                                                                                                      username,
-                                                                                                                     organizationService.getUserHandler());
+                                                                                                                     getOrganizationService().getUserHandler());
 
         if (toDeleteOccurences != null && !toDeleteOccurences.isEmpty()) {
           for (Appointment occAppointment : toDeleteOccurences) {
@@ -187,9 +187,9 @@ public class ExchangeStorageService implements Serializable {
               CalendarConverterUtils.convertExoToExchangeOccurenceEvent(occAppointment,
                                                                         tmpEvent,
                                                                         username,
-                                                                        organizationService.getUserHandler());
+                                                                        getOrganizationService().getUserHandler());
               if (LOG.isDebugEnabled()) {
-                LOG.debug("CREATE Exchange Exceptional Occurence Appointment: " + tmpEvent.getSummary());
+                LOG.debug("CREATE Exchange Exceptional Occurence Appointment: {}", tmpEvent.getSummary());
               }
               try {
                 occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
@@ -219,7 +219,7 @@ public class ExchangeStorageService implements Serializable {
     }
     if (isNew) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("CREATE Exchange Appointment: " + event.getSummary());
+        LOG.debug("CREATE Exchange Appointment: {}", event.getSummary());
       }
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       try {
@@ -244,7 +244,7 @@ public class ExchangeStorageService implements Serializable {
         }
         return false;
       } else if (LOG.isDebugEnabled()) {
-        LOG.debug("UPDATE Exchange Appointment: " + event.getSummary());
+        LOG.debug("UPDATE Exchange Appointment: {}", event.getSummary());
       }
       try {
         appointment.update(ConflictResolutionMode.AlwaysOverwrite);
@@ -314,12 +314,12 @@ public class ExchangeStorageService implements Serializable {
     try {
       appointment = Appointment.bind(service, itemId);
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE Exchange appointment: " + appointment.getSubject());
+        LOG.debug("DELETE Exchange appointment: {}", appointment.getSubject());
       }
       appointment.delete(DeleteMode.HardDelete);
     } catch (ServiceResponseException e) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Exchange Item was not bound, it was deleted or not yet created:" + itemId);
+        LOG.debug("Exchange Item was not bound, it was deleted or not yet created: {}", itemId);
       }
     }
     correspondenceService.deleteCorrespondingId(username, itemId.getUniqueId());
@@ -400,7 +400,7 @@ public class ExchangeStorageService implements Serializable {
     try {
       item = Item.bind(service, itemId);
     } catch (ServiceResponseException e) {
-      LOG.debug("Can't get item identified by id: " + itemId.getUniqueId());
+      LOG.debug("Can't get item identified by id: {}", itemId.getUniqueId());
     }
     return item;
   }
@@ -430,5 +430,12 @@ public class ExchangeStorageService implements Serializable {
                                                                  new PropertySet(AppointmentSchema.LastModifiedTime));
       return appointmentWithModifiedDate.getLastModifiedTime();
     }
+  }
+
+  public OrganizationService getOrganizationService() {
+    if (organizationService == null) {
+      organizationService = CommonsUtils.getService(OrganizationService.class);
+    }
+    return organizationService;
   }
 }

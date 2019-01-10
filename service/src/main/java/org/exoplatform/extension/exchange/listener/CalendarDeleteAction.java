@@ -5,7 +5,7 @@ import javax.jcr.Node;
 import org.apache.commons.chain.Context;
 
 import org.exoplatform.calendar.service.Utils;
-import org.exoplatform.extension.exchange.service.IntegrationService;
+import org.exoplatform.extension.exchange.task.UserIntegrationFacade;
 import org.exoplatform.services.command.action.Action;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -33,7 +33,7 @@ public class CalendarDeleteAction implements Action {
           userId = state.getIdentity().getUserId();
         }
 
-        IntegrationService integrationService = IntegrationService.getInstance(userId);
+        UserIntegrationFacade integrationService = UserIntegrationFacade.getInstance(userId);
         if (integrationService == null) {
           if (LOG.isTraceEnabled()) {
             LOG.info("User '" + (state == null || state.getIdentity() == null ? "Anonymous" : state.getIdentity().getUserId())

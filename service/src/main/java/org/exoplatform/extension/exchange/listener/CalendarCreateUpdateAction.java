@@ -10,7 +10,7 @@ import org.apache.commons.lang.StringUtils;
 
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.Utils;
-import org.exoplatform.extension.exchange.service.IntegrationService;
+import org.exoplatform.extension.exchange.task.UserIntegrationFacade;
 import org.exoplatform.services.command.action.Action;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -71,29 +71,33 @@ public class CalendarCreateUpdateAction implements Action {
         return false;
       }
 
-      IntegrationService integrationService = IntegrationService.getInstance(userId);
+      UserIntegrationFacade integrationService = UserIntegrationFacade.getInstance(userId);
       if (integrationService == null) {
         LOG.trace("No authenticated user was found while trying to create/update eXo Calendar event with id: '{}' for user: {}",
                   eventId,
                   userId);
         return false;
-      } else if (MODIFIED_DATE.get() == null || MODIFIED_DATE.get() == 0) {
-        String calendarId = node.hasProperty(Utils.EXO_CALENDAR_ID) ? node.getProperty(Utils.EXO_CALENDAR_ID).getString() : null;
-        if (integrationService.isCalendarSynchronizedWithExchange(calendarId)) {
-          boolean started = integrationService.setSynchronizationStarted();
-          if (started) {
-            try {
-              modifyUpdateDate(node, System.currentTimeMillis());
-              integrationService.updateOrCreateExchangeCalendarEvent(node);
-            } catch (Exception e) {
-              LOG.warn("Error while create/update an Exchange item for eXo event: " + eventId, e);
-            } finally {
-              integrationService.setSynchronizationStopped();
+      } else {
+        Long lastModifiedDate = MODIFIED_DATE.get();
+        if (lastModifiedDate == null || lastModifiedDate == 0) {
+          String calendarId =
+                            node.hasProperty(Utils.EXO_CALENDAR_ID) ? node.getProperty(Utils.EXO_CALENDAR_ID).getString() : null;
+          if (integrationService.isCalendarSynchronizedWithExchange(calendarId)) {
+            boolean started = integrationService.setSynchronizationStarted();
+            if (started) {
+              try {
+                modifyUpdateDate(node, System.currentTimeMillis());
+                integrationService.updateOrCreateExchangeCalendarEvent(node);
+              } catch (Exception e) {
+                LOG.warn("Error while create/update an Exchange item for eXo event: " + eventId, e);
+              } finally {
+                integrationService.setSynchronizationStopped();
+              }
             }
           }
+        } else {
+          modifyUpdateDate(node, lastModifiedDate);
         }
-      } else {
-        modifyUpdateDate(node, MODIFIED_DATE.get());
       }
     } catch (Exception e) {
       LOG.error("Error while updating Exchange with the eXo Event with Id: " + eventId, e);
