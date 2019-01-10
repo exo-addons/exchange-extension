@@ -191,7 +191,7 @@ public class UserIntegrationFacade {
       ChangeCollection<ItemChange> changeCollection = service.syncFolderItems(folderId,
                                                                               PropertySet.FirstClassProperties,
                                                                               null,
-                                                                              1,
+                                                                              512,
                                                                               SyncFolderItemsScope.NormalItems,
                                                                               syncState);
       syncState = changeCollection.getSyncState();
