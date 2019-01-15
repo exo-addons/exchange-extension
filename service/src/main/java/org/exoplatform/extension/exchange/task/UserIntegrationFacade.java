@@ -171,7 +171,7 @@ public class UserIntegrationFacade {
     if (syncState == null || isNewCalendar) {
       LOG.debug("Start full exchange calendar synchronization for user '{}' exchange folder calendar {} until date {}",
                 username,
-                folderId.getFolderName(),
+                folderId.getFolderName() == null ? folderId.getUniqueId() : folderId.getFolderName(),
                 firstSynchronizationUntilDate);
 
       Date lastSynchronizedDate = null;
@@ -221,7 +221,7 @@ public class UserIntegrationFacade {
 
       LOG.debug("Full exchange calendar synchronization processed successfully for user '{}' for exchange calendar {}, last synchronized event start date: '{}'",
                 username,
-                folderId.getFolderName(),
+                folderId.getFolderName() == null ? folderId.getUniqueId() : folderId.getFolderName(),
                 lastSynchronizedDate == null ? "NO DATE" : lastSynchronizedDate);
       setSynchState(folderId, syncState);
     } else {
