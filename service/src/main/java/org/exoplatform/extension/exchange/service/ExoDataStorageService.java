@@ -88,14 +88,15 @@ public class ExoDataStorageService implements Serializable {
     if ((calendarEvent.getRepeatType() == null || calendarEvent.getRepeatType().equals(CalendarEvent.RP_NOREPEAT))
         && (calendarEvent.getIsExceptionOccurrence() == null || !calendarEvent.getIsExceptionOccurrence())) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE user calendar event: {} with id {}", calendarEvent.getSummary(), calendarEvent.getId());
+        LOG.debug("DELETE user '{}' calendar event: {} with id {}", username, calendarEvent.getSummary(), calendarEvent.getId());
       }
       getExoCalendarDataStorage().removeUserEvent(username, calendarEvent.getCalendarId(), calendarEvent.getId());
       // Remove correspondence between exo and exchange IDs
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     } else if (calendarEvent.getIsExceptionOccurrence() != null && calendarEvent.getIsExceptionOccurrence()) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE user calendar event exceptional occurence: {}, id {}",
+        LOG.debug("DELETE user '{}' calendar event exceptional occurence: {}, id {}",
+                  username,
                   calendarEvent.getSummary(),
                   calendarEvent.getRecurrenceId());
       }
@@ -103,14 +104,18 @@ public class ExoDataStorageService implements Serializable {
       correspondenceService.deleteCorrespondingId(username, calendarEvent.getId());
     } else if (calendarEvent.getRecurrenceId() != null && !calendarEvent.getRecurrenceId().isEmpty()) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE user calendar event occurence from series: {} with id : ",
+        LOG.debug("DELETE user '{}' calendar event occurence from series: {} with id : ",
+                  username,
                   calendarEvent.getSummary(),
                   calendarEvent.getRecurrenceId());
       }
       getExoCalendarDataStorage().removeOccurrenceInstance(username, calendarEvent);
     } else {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE user calendar event series: {} with id {}", calendarEvent.getSummary(), calendarEvent.getId());
+        LOG.debug("DELETE user '{}' calendar event series: {} with id {}",
+                  username,
+                  calendarEvent.getSummary(),
+                  calendarEvent.getId());
       }
       getExoCalendarDataStorage().removeRecurrenceSeries(username, calendarEvent);
       // Remove correspondence between exo and exchange IDs
@@ -198,7 +203,7 @@ public class ExoDataStorageService implements Serializable {
     }
     if (calendar == null) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("CREATE user calendar from Exchange: {}", folder.getDisplayName());
+        LOG.debug("CREATE user '{}' calendar from Exchange: {}", username, folder.getDisplayName());
       }
 
       calendar = new Calendar();
@@ -446,9 +451,9 @@ public class ExoDataStorageService implements Serializable {
         if (LOG.isDebugEnabled()) {
           String eventId = getEventId(appointment.getId().getUniqueId());
           if (isNew) {
-            LOG.debug("CREATE user calendar event: {}, id: {}", appointment.getSubject(), eventId);
+            LOG.debug("CREATE user '{}' calendar event: {}, id: {}", username, appointment.getSubject(), eventId);
           } else {
-            LOG.debug("UPDATE user calendar event: {}, id: {}", appointment.getSubject(), eventId);
+            LOG.debug("UPDATE user '{}' calendar event: {}, id: {}", username, appointment.getSubject(), eventId);
           }
         }
 
@@ -467,7 +472,10 @@ public class ExoDataStorageService implements Serializable {
 
           getExoCalendarDataStorage().saveUserEvent(username, calendar.getId(), event, isNew);
         } catch (ItemExistsException e) {
-          LOG.warn("Event with id {} seems to exists already, ignore it", event.getId());
+          if (LOG.isDebugEnabled()) {
+            LOG.warn("Event with id {} seems to exists already, ignore it", event.getId());
+          }
+          return updatedEvents;
         } finally {
           CalendarCreateUpdateAction.MODIFIED_DATE.set(null);
         }
@@ -546,9 +554,9 @@ public class ExoDataStorageService implements Serializable {
           if (LOG.isDebugEnabled()) {
             String eventId = getEventId(appointment.getId().getUniqueId());
             if (isNew) {
-              LOG.debug("CREATE recurrent user calendar event: {} with id {}", appointment.getSubject(), eventId);
+              LOG.debug("CREATE recurrent user '{}' calendar event: {} with id {}", username, appointment.getSubject(), eventId);
             } else {
-              LOG.debug("UPDATE recurrent user calendar event: {} with id {}", appointment.getSubject(), eventId);
+              LOG.debug("UPDATE recurrent user '{}' calendar event: {} with id {}", username, appointment.getSubject(), eventId);
             }
           }
 

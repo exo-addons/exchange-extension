@@ -189,7 +189,9 @@ public class ExchangeDataStorageService implements Serializable {
                                                                         username,
                                                                         getOrganizationService().getUserHandler());
               if (LOG.isDebugEnabled()) {
-                LOG.debug("CREATE Exchange Exceptional Occurence Appointment: {}", tmpEvent.getSummary());
+                LOG.debug("CREATE for user {} an Exchange Exceptional Occurence Appointment: {}",
+                          username,
+                          tmpEvent.getSummary());
               }
               try {
                 occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
@@ -219,7 +221,7 @@ public class ExchangeDataStorageService implements Serializable {
     }
     if (isNew) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("CREATE Exchange Appointment: {}", event.getSummary());
+        LOG.debug("CREATE for user '{}' Exchange Appointment: {}", username, event.getSummary());
       }
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       try {
@@ -239,12 +241,15 @@ public class ExchangeDataStorageService implements Serializable {
     } else {
       if (getLastModifiedDate(appointment).getTime() == event.getLastModified()) {
         if (LOG.isDebugEnabled()) {
-          LOG.debug("IGNORE UPDATE Exchange Appointment '{}' because its modified date is the same as eXo Event",
+          LOG.debug("IGNORE UPDATE for user '{}' Exchange Appointment '{}' because its modified date is the same as eXo Event",
+                    username,
                     event.getSummary());
         }
         return false;
       } else if (LOG.isDebugEnabled()) {
-        LOG.debug("UPDATE Exchange Appointment: {}", event.getSummary());
+        LOG.debug("UPDATE for user '{}' Exchange Appointment: {}",
+                  username,
+                  event.getSummary());
       }
       try {
         appointment.update(ConflictResolutionMode.AlwaysOverwrite);
@@ -314,12 +319,12 @@ public class ExchangeDataStorageService implements Serializable {
     try {
       appointment = Appointment.bind(service, itemId);
       if (LOG.isDebugEnabled()) {
-        LOG.debug("DELETE Exchange appointment: {}", appointment.getSubject());
+        LOG.debug("DELETE for user '{}' Exchange appointment: {}", username, appointment.getSubject());
       }
       appointment.delete(DeleteMode.HardDelete);
     } catch (ServiceResponseException e) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Exchange Item was not bound, it was deleted or not yet created: {}", itemId);
+        LOG.debug("Exchange Item was not bound for user '{}', it was deleted or not yet created: {}", username, itemId);
       }
     }
     correspondenceService.deleteCorrespondingId(username, itemId.getUniqueId());
@@ -400,7 +405,7 @@ public class ExchangeDataStorageService implements Serializable {
     try {
       item = Item.bind(service, itemId);
     } catch (ServiceResponseException e) {
-      LOG.debug("Can't get item identified by id: {}", itemId.getUniqueId());
+      LOG.debug("Can't get item for user '{}' identified by id: {}", itemId.getUniqueId());
     }
     return item;
   }

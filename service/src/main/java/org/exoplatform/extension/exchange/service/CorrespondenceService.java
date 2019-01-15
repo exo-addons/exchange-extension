@@ -3,8 +3,7 @@ package org.exoplatform.extension.exchange.service;
 import java.io.*;
 import java.util.*;
 
-import javax.jcr.Node;
-import javax.jcr.Session;
+import javax.jcr.*;
 
 import org.apache.commons.io.output.ByteArrayOutputStream;
 
@@ -109,23 +108,28 @@ public class CorrespondenceService implements Serializable {
   }
 
   private void saveProperties(String username, Properties properties) throws Exception {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    properties.store(out, "");
-    SessionProvider sessionProvider = getSessionProviderService().getSystemSessionProvider(null);
-    Node node = getHierarchyCreator().getUserApplicationNode(sessionProvider, username);
-    if (node == null) {
-      throw new IllegalStateException("User application node not found. Please fix this and try later.");
+    try {
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      properties.store(out, "");
+      SessionProvider sessionProvider = getSessionProviderService().getSystemSessionProvider(null);
+      Node node = getHierarchyCreator().getUserApplicationNode(sessionProvider, username);
+      if (node == null) {
+        throw new IllegalStateException("User application node not found. Please fix this and try later.");
+      }
+      Session session = node.getSession();
+      if (!node.hasNode(EXCHANGE_NODE_NAME)) {
+        node = node.addNode(EXCHANGE_NODE_NAME, Utils.NT_RESOURCE);
+        node.setProperty(Utils.JCR_LASTMODIFIED, java.util.Calendar.getInstance().getTimeInMillis());
+        node.setProperty(Utils.JCR_MIMETYPE, "text/plain");
+      } else {
+        node = node.getNode(EXCHANGE_NODE_NAME);
+      }
+      node.setProperty(Utils.JCR_DATA, new ByteArrayInputStream(out.toByteArray()));
+      session.save();
+    } catch (ItemExistsException e) {
+      LOG.debug("Error whale saving properties, reattempting", e);
+      saveProperties(username, properties);
     }
-    Session session = node.getSession();
-    if (!node.hasNode(EXCHANGE_NODE_NAME)) {
-      node = node.addNode(EXCHANGE_NODE_NAME, Utils.NT_RESOURCE);
-      node.setProperty(Utils.JCR_LASTMODIFIED, java.util.Calendar.getInstance().getTimeInMillis());
-      node.setProperty(Utils.JCR_MIMETYPE, "text/plain");
-    } else {
-      node = node.getNode(EXCHANGE_NODE_NAME);
-    }
-    node.setProperty(Utils.JCR_DATA, new ByteArrayInputStream(out.toByteArray()));
-    session.save();
   }
 
   private Properties loadCorrespondenceProperties(String username) throws Exception {

@@ -228,7 +228,11 @@ public class ExchangeIntegrationTask extends Thread {
         LOG.trace("Synchronization completed.");
       }
     } catch (Exception e) {
-      LOG.error("Error while synchronizing calendar entries.", e);
+      if (LOG.isDebugEnabled()) {
+        LOG.warn("Error while synchronizing calendar entries. It will be retried next iteration.", e);
+      } else {
+        LOG.warn("Error while synchronizing calendar entries. It will be retried next iteration. Error: {}", e.getMessage());
+      }
     } finally {
       if (firstSynchronizationIteration) {
         this.firstSynchronizationRunning = false;

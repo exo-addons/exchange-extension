@@ -157,7 +157,6 @@ public class UserIntegrationFacade {
    * Synchronize Exchange Calendar identified by 'folderId' with eXo Calendar.
    * 
    * @param folderId
-   * 
    * @throws Exception
    * @return List of event IDs
    */
@@ -170,8 +169,9 @@ public class UserIntegrationFacade {
 
     String syncState = getSynchState(folderId);
     if (syncState == null || isNewCalendar) {
-      LOG.debug("Start full exchange calendar synchronization for folderId {} until date {}",
-                folderId.getUniqueId(),
+      LOG.debug("Start full exchange calendar synchronization for user '{}' exchange folder calendar {} until date {}",
+                username,
+                folderId.getFolderName(),
                 firstSynchronizationUntilDate);
 
       Date lastSynchronizedDate = null;
@@ -204,8 +204,14 @@ public class UserIntegrationFacade {
           results = getItems(folderId, view);
         }
 
-        lastSynchronizedDate = synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
-        if (!results.isMoreAvailable() || firstSynchronizationUntilDate.after(lastSynchronizedDate)) {
+        try {
+          lastSynchronizedDate = synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
+        } catch (Exception e) {
+          LOG.error("Error while synchronizing for user '{}' '{}' items from offset '{}'", username, pageSize, offset);
+        }
+
+        if (!results.isMoreAvailable()
+            || (lastSynchronizedDate != null && firstSynchronizationUntilDate.after(lastSynchronizedDate))) {
           break;
         }
 
@@ -213,16 +219,17 @@ public class UserIntegrationFacade {
         view.setOffset(offset);
       }
 
-      LOG.debug("Full exchange calendar synchronization processed successfully for folderId {}, last synchronized event start date: {}",
-                folderId.getUniqueId(),
-                lastSynchronizedDate == null ? "" : lastSynchronizedDate);
+      LOG.debug("Full exchange calendar synchronization processed successfully for user '{}' for exchange calendar {}, last synchronized event start date: '{}'",
+                username,
+                folderId.getFolderName(),
+                lastSynchronizedDate == null ? "NO DATE" : lastSynchronizedDate);
       setSynchState(folderId, syncState);
     } else {
-      LOG.debug("Synchronize last modified events since last synchronization");
+      LOG.debug("Synchronize last modified events since last synchronization for user '{}'", username);
 
       int countModifiedItems = synchronizeExchangeAppointementsByState(folderId, updatedExoEventIds);
 
-      LOG.debug("First synchronization is finished with {} modified/created events", countModifiedItems);
+      LOG.debug("First synchronization is finished for user '{}' with {} modified/created events", username, countModifiedItems);
     }
 
     return updatedExoEventIds;
@@ -602,7 +609,13 @@ public class UserIntegrationFacade {
           lastSynchronizedDate = appointment.getStart();
         }
 
-        List<CalendarEvent> updatedEvents = exoStorageService.createOrUpdateEvent((Appointment) item, username);
+        List<CalendarEvent> updatedEvents = null;
+        try {
+          updatedEvents = exoStorageService.createOrUpdateEvent((Appointment) item, username);
+        } catch (Exception e) {
+          LOG.warn("Error user '{}' create/update exchange item '{}'", username, item.getId().getUniqueId());
+        }
+
         if (updatedEvents != null && !updatedEvents.isEmpty()) {
           for (CalendarEvent calendarEvent : updatedEvents) {
             eventIds.add(calendarEvent.getId());

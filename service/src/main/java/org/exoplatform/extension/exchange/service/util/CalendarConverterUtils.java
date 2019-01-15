@@ -297,7 +297,8 @@ public class CalendarConverterUtils {
 
           if (tmpEvent != null && verifyModifiedDatesConflict(tmpEvent, occurenceAppointment)) {
             if (LOG.isDebugEnabled()) {
-              LOG.debug("CONFLICT: Attempting to update eXo Event with Exchange Event, but modification date of eXo is after, ignore updating.");
+              LOG.info("CONFLICT: Attempting to update eXo Event with Exchange Event for user {}, but modification date of eXo is after, ignore updating.",
+                       username);
             }
             continue;
           }
@@ -309,13 +310,17 @@ public class CalendarConverterUtils {
             tmpEvent.setId(masterEvent.getId());
             tmpEvent.setCalendarId(masterEvent.getCalendarId());
             if (LOG.isDebugEnabled()) {
-              LOG.debug("CREATE exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: "
-                  + tmpEvent.getRecurrenceId());
+              LOG.debug("CREATE exo calendar for user {} - Occurence event: {}, with recurence id: {}",
+                        username,
+                        tmpEvent.getSummary(),
+                        tmpEvent.getRecurrenceId());
             }
           } else {
             if (LOG.isDebugEnabled()) {
-              LOG.debug("UPDATE exo calendar Occurence event: " + tmpEvent.getSummary() + ", with recurence id: "
-                  + tmpEvent.getRecurrenceId());
+              LOG.debug("UPDATE exo calendar for user {} - Occurence event: {}, with recurence id: {}",
+                        username,
+                        tmpEvent.getSummary(),
+                        tmpEvent.getRecurrenceId());
             }
             convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler);
           }
