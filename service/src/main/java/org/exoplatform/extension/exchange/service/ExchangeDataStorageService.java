@@ -189,9 +189,12 @@ public class ExchangeDataStorageService implements Serializable {
                                                                         username,
                                                                         getOrganizationService().getUserHandler());
               if (LOG.isDebugEnabled()) {
-                LOG.debug("CREATE for user {} an Exchange Exceptional Occurence Appointment: {}",
+                LOG.debug("CREATE for user {} an Exchange Exceptional Occurence Appointment: {}. From: {} To: AlldayEvent = {}",
                           username,
-                          tmpEvent.getSummary());
+                          tmpEvent.getSummary(),
+                          occAppointment.getStart(),
+                          occAppointment.getEnd(),
+                          occAppointment.getIsAllDayEvent());
               }
               try {
                 occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
@@ -221,7 +224,12 @@ public class ExchangeDataStorageService implements Serializable {
     }
     if (isNew) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("CREATE for user '{}' Exchange Appointment: {}", username, event.getSummary());
+        LOG.debug("CREATE for user '{}' Exchange Appointment: {}. From: {} To: AlldayEvent = {}",
+                  username,
+                  event.getSummary(),
+                  appointment.getStart(),
+                  appointment.getEnd(),
+                  appointment.getIsAllDayEvent());
       }
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       try {
@@ -241,15 +249,21 @@ public class ExchangeDataStorageService implements Serializable {
     } else {
       if (getLastModifiedDate(appointment).getTime() == event.getLastModified()) {
         if (LOG.isDebugEnabled()) {
-          LOG.debug("IGNORE UPDATE for user '{}' Exchange Appointment '{}' because its modified date is the same as eXo Event",
+          LOG.debug("IGNORE UPDATE for user '{}' Exchange Appointment '{}' because its modified date is the same as eXo Event. From: {} To: AlldayEvent = {}",
                     username,
-                    event.getSummary());
+                    event.getSummary(),
+                    appointment.getStart(),
+                    appointment.getEnd(),
+                    appointment.getIsAllDayEvent());
         }
         return false;
       } else if (LOG.isDebugEnabled()) {
-        LOG.debug("UPDATE for user '{}' Exchange Appointment: {}",
+        LOG.debug("UPDATE for user '{}' Exchange Appointment: {}. From: {} To: AlldayEvent = {}",
                   username,
-                  event.getSummary());
+                  event.getSummary(),
+                  appointment.getStart(),
+                  appointment.getEnd(),
+                  appointment.getIsAllDayEvent());
       }
       try {
         appointment.update(ConflictResolutionMode.AlwaysOverwrite);

@@ -208,9 +208,11 @@ public class UserIntegrationFacade {
         try {
           Date lastSynchronizedIterationDate = synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
           lastSynchronizedDate = lastSynchronizedIterationDate == null
-              || lastSynchronizedIterationDate.after(lastSynchronizedDate) ? lastSynchronizedDate : lastSynchronizedIterationDate;
+              || (lastSynchronizedDate != null && lastSynchronizedIterationDate.after(lastSynchronizedDate))
+                                                                                                             ? lastSynchronizedDate
+                                                                                                             : lastSynchronizedIterationDate;
         } catch (Exception e) {
-          LOG.error("Error while synchronizing for user '{}' '{}' items from offset '{}'", username, pageSize, offset);
+          LOG.error("Error while synchronizing for user '{}' '{}' items from offset '{}'", username, pageSize, offset, e);
         }
 
         if (!results.isMoreAvailable()
