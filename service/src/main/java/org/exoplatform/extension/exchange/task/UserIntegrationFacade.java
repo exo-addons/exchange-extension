@@ -132,6 +132,7 @@ public class UserIntegrationFacade {
     java.util.Calendar untilCalendarDate = java.util.Calendar.getInstance();
     untilCalendarDate.add(java.util.Calendar.DATE, -maxFirstSynchronizationDays);
     firstSynchronizationUntilDate = untilCalendarDate.getTime();
+    LOG.info("Exchange calendar synchronization will start for user {} until day {}", username, firstSynchronizationUntilDate);
   }
 
   /**
@@ -205,7 +206,9 @@ public class UserIntegrationFacade {
         }
 
         try {
-          lastSynchronizedDate = synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
+          Date lastSynchronizedIterationDate = synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
+          lastSynchronizedDate = lastSynchronizedIterationDate == null
+              || lastSynchronizedIterationDate.after(lastSynchronizedDate) ? lastSynchronizedDate : lastSynchronizedIterationDate;
         } catch (Exception e) {
           LOG.error("Error while synchronizing for user '{}' '{}' items from offset '{}'", username, pageSize, offset);
         }
@@ -274,6 +277,12 @@ public class UserIntegrationFacade {
     if (calendarEvent != null) {
       exoStorageService.deleteEvent(username, calendarEvent);
     }
+  }
+
+  private void removeSynchState(FolderId folderId) {
+    getSettingService().remove(USER_EXCHANGE_CONTEXT,
+                               USER_EXCHANGE_SCOPE.id(folderId.getUniqueId()),
+                               USER_EXCHANGE_SYNC_STATE_KEY);
   }
 
   private void setSynchState(FolderId folderId, String syncState) {
@@ -570,10 +579,12 @@ public class UserIntegrationFacade {
   public void addFolderToSynchronization(String folderIdString) throws Exception {
     String calendarId = CalendarConverterUtils.getCalendarId(folderIdString);
     correspondenceService.setCorrespondingId(username, calendarId, folderIdString);
+    removeSynchState(FolderId.getFolderIdFromString(folderIdString));
   }
 
   public void deleteFolderFromSynchronization(String folderIdString) throws Exception {
     correspondenceService.deleteCorrespondingId(username, folderIdString);
+    removeSynchState(FolderId.getFolderIdFromString(folderIdString));
   }
 
   public synchronized boolean setSynchronizationStarted() {
@@ -605,8 +616,18 @@ public class UserIntegrationFacade {
     for (Item item : items) {
       if (item instanceof Appointment) {
         Appointment appointment = (Appointment) item;
-        if (lastSynchronizedDate == null || lastSynchronizedDate.before(appointment.getStart())) {
-          lastSynchronizedDate = appointment.getStart();
+        Date startTime = appointment.getStart();
+
+        if (lastSynchronizedDate == null || lastSynchronizedDate.before(startTime)) {
+          lastSynchronizedDate = startTime;
+        }
+
+        if (firstSynchronizationUntilDate.after(startTime)) {
+          LOG.info("Ignore calendar event '{}' because its start date {} is after limit date {}",
+                   appointment.getSubject(),
+                   startTime,
+                   firstSynchronizationUntilDate);
+          continue;
         }
 
         List<CalendarEvent> updatedEvents = null;
