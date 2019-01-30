@@ -174,7 +174,12 @@ public class ExchangeIntegrationTask extends Thread {
 
   @Override
   public void run() {
-    if (!waitOtherTasks()) {
+    try {
+      if (!waitOtherTasks()) {
+        return;
+      }
+    } catch (Exception e) {
+      LOG.error("Error waiting to start user synchronization", e);
       return;
     }
     boolean firstSynchronizationIteration = false;
@@ -287,22 +292,28 @@ public class ExchangeIntegrationTask extends Thread {
     return events;
   }
 
-  private boolean waitOtherTasks() {
+  private boolean waitOtherTasks() throws Exception { // NOSONAR
     int i = 0;
-    while (!integrationService.setSynchronizationStarted() && i < 5) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'"
-            + username + "'.");
-      }
+    int maxWaitIterations = 5;
+    boolean synchronizationStarted = integrationService.setSynchronizationStarted();
+    try {
+      while (!synchronizationStarted && i < maxWaitIterations) {
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("Exchange integration is in use, scheduled job will wait until synchronization is finished for user:'"
+              + username + "'.");
+        }
 
-      try {
         Thread.sleep(3000);
-      } catch (Exception e) {
-        LOG.warn(e.getMessage());
+        synchronizationStarted = integrationService.setSynchronizationStarted();
+        i++;
       }
-      i++;
+    } catch (Exception e) {
+      if (synchronizationStarted) { // NOSONAR
+        integrationService.setSynchronizationStopped();
+      }
+      throw e;
     }
-    return i < 5;
+    return synchronizationStarted;
   }
 
   private void synchronizeByModificationDate(Date exoLastSyncDate, List<String> updatedExoEventIDs) throws Exception {

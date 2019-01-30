@@ -2,9 +2,11 @@ package org.exoplatform.extension.exchange.service;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.Map.Entry;
 import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.time.DateUtils;
 
 import org.exoplatform.calendar.service.CalendarEvent;
 import org.exoplatform.calendar.service.CalendarService;
@@ -16,11 +18,11 @@ import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.organization.OrganizationService;
 
-import microsoft.exchange.webservices.data.core.ExchangeService;
-import microsoft.exchange.webservices.data.core.PropertySet;
+import microsoft.exchange.webservices.data.core.*;
 import microsoft.exchange.webservices.data.core.enumeration.property.BasePropertySet;
 import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
 import microsoft.exchange.webservices.data.core.enumeration.service.*;
+import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceObjectPropertyException;
 import microsoft.exchange.webservices.data.core.exception.service.remote.ServiceResponseException;
 import microsoft.exchange.webservices.data.core.service.folder.CalendarFolder;
@@ -30,6 +32,7 @@ import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
 import microsoft.exchange.webservices.data.property.complex.ItemId;
+import microsoft.exchange.webservices.data.property.definition.PropertyDefinition;
 import microsoft.exchange.webservices.data.search.FindFoldersResults;
 import microsoft.exchange.webservices.data.search.FolderView;
 
@@ -189,21 +192,23 @@ public class ExchangeDataStorageService implements Serializable {
                                                                         username,
                                                                         getOrganizationService().getUserHandler());
               if (LOG.isDebugEnabled()) {
-                LOG.debug("CREATE for user {} an Exchange Exceptional Occurence Appointment: {}. From: {} To: AlldayEvent = {}",
+                LOG.debug("CREATE for user {} an Exchange Exceptional Occurence Appointment: {}. From: {} To: {} AlldayEvent = {}",
                           username,
                           tmpEvent.getSummary(),
-                          occAppointment.getStart(),
-                          occAppointment.getEnd(),
-                          occAppointment.getIsAllDayEvent());
+                          getStartDate(occAppointment),
+                          getEndDate(occAppointment),
+                          getIsAllDayEvent(occAppointment));
               }
               try {
-                occAppointment.update(ConflictResolutionMode.AlwaysOverwrite);
+                occAppointment.update(ConflictResolutionMode.AutoResolve);
+                displayLogIfNotSameDates(occAppointment);
               } catch (ServiceResponseException e) {
                 if (e.getMessage() != null && e.getMessage().contains("At least one recipient isn't valid")) {
                   if (LOG.isTraceEnabled()) {
                     LOG.warn("Error while saving appointment", e);
                   }
-                  occAppointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToNone);
+                  occAppointment.update(ConflictResolutionMode.AutoResolve, SendInvitationsOrCancellationsMode.SendToNone);
+                  displayLogIfNotSameDates(occAppointment);
                 } else {
                   throw e;
                 }
@@ -224,16 +229,17 @@ public class ExchangeDataStorageService implements Serializable {
     }
     if (isNew) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("CREATE for user '{}' Exchange Appointment: {}. From: {} To: AlldayEvent = {}",
+        LOG.debug("CREATE for user '{}' Exchange Appointment: {}. From: {} To: {} AlldayEvent = {}",
                   username,
                   event.getSummary(),
-                  appointment.getStart(),
-                  appointment.getEnd(),
-                  appointment.getIsAllDayEvent());
+                  getStartDate(appointment),
+                  getEndDate(appointment),
+                  getIsAllDayEvent(appointment));
       }
       FolderId folderId = FolderId.getFolderIdFromString(folderIdString);
       try {
         appointment.save(folderId);
+        displayLogIfNotSameDates(appointment);
       } catch (ServiceResponseException e) {
         if (e.getMessage() != null && e.getMessage().contains("At least one recipient isn't valid")) {
           if (LOG.isTraceEnabled()) {
@@ -249,30 +255,32 @@ public class ExchangeDataStorageService implements Serializable {
     } else {
       if (getLastModifiedDate(appointment).getTime() == event.getLastModified()) {
         if (LOG.isDebugEnabled()) {
-          LOG.debug("IGNORE UPDATE for user '{}' Exchange Appointment '{}' because its modified date is the same as eXo Event. From: {} To: AlldayEvent = {}",
+          LOG.debug("IGNORE UPDATE for user '{}' Exchange Appointment '{}' because its modified date is the same as eXo Event. From: {} To: {} AlldayEvent = {}",
                     username,
                     event.getSummary(),
-                    appointment.getStart(),
-                    appointment.getEnd(),
-                    appointment.getIsAllDayEvent());
+                    getStartDate(appointment),
+                    getEndDate(appointment),
+                    getIsAllDayEvent(appointment));
         }
         return false;
       } else if (LOG.isDebugEnabled()) {
-        LOG.debug("UPDATE for user '{}' Exchange Appointment: {}. From: {} To: AlldayEvent = {}",
+        LOG.debug("UPDATE for user '{}' Exchange Appointment: {}. From: {} To: {} AlldayEvent = {}",
                   username,
                   event.getSummary(),
-                  appointment.getStart(),
-                  appointment.getEnd(),
-                  appointment.getIsAllDayEvent());
+                  getStartDate(appointment),
+                  getEndDate(appointment),
+                  getIsAllDayEvent(appointment));
       }
       try {
-        appointment.update(ConflictResolutionMode.AlwaysOverwrite);
+        appointment.update(ConflictResolutionMode.AutoResolve);
+        displayLogIfNotSameDates(appointment);
       } catch (ServiceResponseException e) {
         if (e.getMessage() != null && e.getMessage().contains("At least one recipient isn't valid")) {
           if (LOG.isTraceEnabled()) {
             LOG.warn("Error while saving appointment", e);
           }
-          appointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToNone);
+          appointment.update(ConflictResolutionMode.AutoResolve, SendInvitationsOrCancellationsMode.SendToNone);
+          displayLogIfNotSameDates(appointment);
         } else {
           throw e;
         }
@@ -451,7 +459,64 @@ public class ExchangeDataStorageService implements Serializable {
     }
   }
 
-  public OrganizationService getOrganizationService() {
+  private Date getStartDate(Appointment appointment) throws ServiceLocalException {
+    try {
+      return appointment.getStart();
+    } catch (ServiceLocalException e) {
+      return null;
+    }
+  }
+
+  private Date getEndDate(Appointment appointment) {
+    try {
+      return appointment.getEnd();
+    } catch (ServiceLocalException e) {
+      return null;
+    }
+  }
+
+  private Boolean getIsAllDayEvent(Appointment appointment) {
+    try {
+      return appointment.getIsAllDayEvent();
+    } catch (ServiceLocalException e) {
+      return false;
+    }
+  }
+
+  private void displayLogIfNotSameDates(Appointment appointment) throws Exception,
+                                                                 ServiceLocalException,
+                                                                 ServiceResponseException {
+    // displayAppointmentProperties(appointment);
+    try {
+      Appointment appointmentUpdated = Appointment.bind(appointment.getService(), appointment.getId());
+      if (appointment.getIsAllDayEvent() && (!DateUtils.isSameInstant(getStartDate(appointmentUpdated), getStartDate(appointment))
+          || !DateUtils.isSameInstant(getEndDate(appointmentUpdated), getEndDate(appointment)))) {
+        LOG.debug("Not same date between updated and to update FROM {}/{} TO {}/{}, update again",
+                  getStartDate(appointmentUpdated),
+                  getStartDate(appointment),
+                  getEndDate(appointmentUpdated),
+                  getEndDate(appointment));
+        // displayAppointmentProperties(appointmentUpdated);
+        appointment.update(ConflictResolutionMode.AutoResolve);
+      }
+    } catch (Exception e) {
+      LOG.debug("Error re-saving appointment");
+    }
+  }
+
+  private void displayAppointmentProperties(Appointment appointment) {
+    PropertyBag properties = appointment.getPropertyBag();
+    if (properties != null && properties.getProperties() != null) {
+      Set<Entry<PropertyDefinition, Object>> entrySet = properties.getProperties().entrySet();
+      for (Entry<PropertyDefinition, Object> entry : entrySet) {
+        String uri = entry.getKey().getUri();
+        uri = uri != null && uri.indexOf(":") > 0 ? uri.split(":")[1] : uri;
+        System.out.println("              Property " + entry.getKey().getUri() + " = " + entry.getValue());
+      }
+    }
+  }
+
+  private OrganizationService getOrganizationService() {
     if (organizationService == null) {
       organizationService = CommonsUtils.getService(OrganizationService.class);
     }

@@ -2,6 +2,8 @@ package org.exoplatform.extension.exchange.service.util;
 
 import java.io.ByteArrayInputStream;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.Calendar;
 import java.util.stream.Collectors;
@@ -38,6 +40,10 @@ import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.R
  */
 @SuppressWarnings("all")
 public class CalendarConverterUtils {
+
+  private static final TimeZone           DEFAULT_TIME_ZONE             = TimeZone.getDefault();
+
+  private static final int                DEFAULT_TIMEZONE_RAW_OFFSET   = DEFAULT_TIME_ZONE.getRawOffset();
 
   private static final Log                LOG                           = ExoLogger.getLogger(CalendarConverterUtils.class);
 
@@ -370,7 +376,7 @@ public class CalendarConverterUtils {
     } else if (appointment.getLastModifiedTime() == null) {
       return true;
     }
-    return event.getLastModified() > appointment.getLastModifiedTime().getTime();
+    return event.getLastModified() >= appointment.getLastModifiedTime().getTime();
   }
 
   /**
@@ -982,30 +988,55 @@ public class CalendarConverterUtils {
 
   private static void setAppointmentDates(Appointment appointment, CalendarEvent calendarEvent) throws Exception {
     boolean isAllDay = isAllDayEvent(calendarEvent);
-    Calendar calendar = Calendar.getInstance();
+//    appointment.setIsAllDayEvent(isAllDay);
+    appointment.setIsAllDayEvent(false);
+    Calendar start = Calendar.getInstance();
 
     if (isAllDay) {
-      calendar.setTime(calendarEvent.getFromDateTime());
-      calendar.set(Calendar.HOUR_OF_DAY, 0);
-      calendar.set(Calendar.MINUTE, 0);
-      calendar.set(Calendar.SECOND, 0);
-      calendar.set(Calendar.MILLISECOND, TimeZone.getDefault().getRawOffset());
+      start.setTime(calendarEvent.getFromDateTime());
+      start.setTimeZone(DEFAULT_TIME_ZONE);
+      start.set(Calendar.HOUR_OF_DAY, 0);
+      start.set(Calendar.MINUTE, 0);
+      start.set(Calendar.SECOND, 0);
+      start.set(Calendar.MILLISECOND, 0);
+      start.add(Calendar.HOUR_OF_DAY, 8);
     } else {
-      calendar = getCalendarInstance(calendarEvent.getFromDateTime());
+      start = getCalendarInstance(calendarEvent.getFromDateTime());
     }
-    appointment.setStart(calendar.getTime());
+    appointment.setStart(start.getTime());
 
+    Calendar end = Calendar.getInstance();
     if (isAllDay) {
-      calendar.setTime(calendarEvent.getToDateTime());
-      calendar.set(Calendar.HOUR_OF_DAY, 0);
-      calendar.set(Calendar.MINUTE, 0);
-      calendar.set(Calendar.SECOND, 0);
-      calendar.set(Calendar.MILLISECOND, TimeZone.getDefault().getRawOffset());
+      end.setTime(calendarEvent.getToDateTime());
+      end.setTimeZone(DEFAULT_TIME_ZONE);
+      end.set(Calendar.HOUR_OF_DAY, 0);
+      end.set(Calendar.MINUTE, 0);
+      end.set(Calendar.SECOND, 0);
+      end.set(Calendar.MILLISECOND, 0);
+      end.add(Calendar.HOUR_OF_DAY, 18);
+
+      appointment.setEnd(end.getTime());
+
+//      if (appointment.getLoadedPropertyDefinitions().contains(AppointmentSchema.Duration)) {
+//        if (appointment.getDuration().getDays() > 0) {
+//          appointment.getDuration().add(TimeSpan.DAYS, -appointment.getDuration().getDays());
+//        }
+//
+//        long diffInDays = getDiffDays(appointment, start, end);
+//        appointment.getDuration().add(TimeSpan.DAYS, diffInDays + 1);
+//      }
     } else {
-      calendar = getCalendarInstance(calendarEvent.getToDateTime());
+      end = getCalendarInstance(calendarEvent.getToDateTime());
+      appointment.setEnd(end.getTime());
     }
-    appointment.setEnd(calendar.getTime());
-    appointment.setIsAllDayEvent(isAllDay);
+  }
+
+  private static long getDiffDays(Appointment appointment, Calendar start, Calendar end) throws ServiceLocalException {
+    LocalDate startLocalDate = LocalDate.of(start.get(Calendar.YEAR),
+                                            start.get(Calendar.MONTH) + 1,
+                                            start.get(Calendar.DAY_OF_MONTH));
+    LocalDate endLocalDate = LocalDate.of(end.get(Calendar.YEAR), end.get(Calendar.MONTH) + 1, end.get(Calendar.DAY_OF_MONTH));
+    return ChronoUnit.DAYS.between(startLocalDate, endLocalDate);
   }
 
   private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {

@@ -31,6 +31,7 @@ import microsoft.exchange.webservices.data.core.exception.service.remote.Service
 import microsoft.exchange.webservices.data.core.service.folder.Folder;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
+import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
 
 /**
  * @author Boubaker Khanfir
@@ -497,6 +498,12 @@ public class ExoDataStorageService implements Serializable {
         } else {
           masterEvent = getEventByAppointmentId(username, appointment.getId().getUniqueId());
           updatedEvents.add(masterEvent);
+          if (verifyModifiedDatesConflict(masterEvent, appointment)) {
+            if (LOG.isTraceEnabled()) {
+              LOG.trace("Attempting to update eXo Event with Exchange Event, but modification date of eXo is after, ignore updating.");
+            }
+            return updatedEvents;
+          }
           orginialStartDate = masterEvent.getFromDateTime();
         }
 
@@ -510,32 +517,36 @@ public class ExoDataStorageService implements Serializable {
         appointment = Appointment.bind(appointment.getService(),
                                        appointment.getId(),
                                        new PropertySet(AppointmentSchema.Recurrence));
-        if (appointment.getRecurrence().hasEnd()) {
-          Date recEndDate = appointment.getRecurrence().getEndDate();
+        Recurrence recurrence = appointment.getRecurrence();
+        if (recurrence.hasEnd()) {
+          Date recEndDate = recurrence.getEndDate();
 
           appointment = Appointment.bind(appointment.getService(),
                                          appointment.getId(),
                                          new PropertySet(BasePropertySet.FirstClassProperties));
           if (recEndDate == null) {
-            LOG.warn("Inconsistent data delivered by MS Exchange. The recurrent Event has end but end date is null: '"
-                + appointment.getSubject() + "', start:" + appointment.getStart() + ", end : " + appointment.getEnd());
-          } else {
-            Appointment tmpAppointment = Appointment.bind(appointment.getService(),
-                                                          appointment.getId(),
-                                                          new PropertySet(AppointmentSchema.LastOccurrence));
-            if (tmpAppointment.getLastOccurrence() == null) {
-              LOG.warn("Can't find last occurence of recurrent Event : '" + appointment.getSubject() + "', start:"
-                  + appointment.getStart() + ", end : " + appointment.getEnd());
+            if (recurrence.getNumberOfOccurrences() != null && recurrence.getNumberOfOccurrences() > 0) {
+              recEndDate = appointment.getLastOccurrence().getStart();
             } else {
-              isLastOccurenceDeleted = tmpAppointment.getLastOccurrence().getEnd().getTime() < recEndDate.getTime();
+              LOG.warn("Inconsistent data delivered by MS Exchange. The recurrent Event has end but end date is null: '"
+                  + appointment.getSubject() + "', start:" + appointment.getStart() + ", end : " + appointment.getEnd());
+            }
+          }
+          Appointment tmpAppointment = Appointment.bind(appointment.getService(),
+                                                        appointment.getId(),
+                                                        new PropertySet(AppointmentSchema.LastOccurrence));
+          if (tmpAppointment.getLastOccurrence() == null) {
+            LOG.warn("Can't find last occurence of recurrent Event : '" + appointment.getSubject() + "', start:"
+                + appointment.getStart() + ", end : " + appointment.getEnd());
+          } else {
+            isLastOccurenceDeleted = tmpAppointment.getLastOccurrence().getEnd().getTime() < recEndDate.getTime();
 
-              if (isLastOccurenceDeleted && masterEvent.getExceptionIds() != null) {
-                String pattern = EXCLUDE_ID_FORMAT_FIRST_CHARS.format(recEndDate);
-                int i = 0;
-                while (isLastOccurenceDeleted && i < masterEvent.getExceptionIds().size()) {
-                  isLastOccurenceDeleted = !((String) masterEvent.getExceptionIds().toArray()[i]).startsWith(pattern);
-                  i++;
-                }
+            if (isLastOccurenceDeleted && masterEvent.getExceptionIds() != null) {
+              String pattern = EXCLUDE_ID_FORMAT_FIRST_CHARS.format(recEndDate);
+              int i = 0;
+              while (isLastOccurenceDeleted && i < masterEvent.getExceptionIds().size()) {
+                isLastOccurenceDeleted = !((String) masterEvent.getExceptionIds().toArray()[i]).startsWith(pattern);
+                i++;
               }
             }
           }
