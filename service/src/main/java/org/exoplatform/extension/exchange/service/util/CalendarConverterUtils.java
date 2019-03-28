@@ -435,7 +435,11 @@ public class CalendarConverterUtils {
     assert repeatType != null && !repeatType.equals(CalendarEvent.RP_NOREPEAT);
     Recurrence recurrence = null;
     if (repeatType.equals(CalendarEvent.RP_DAILY)) {
-      recurrence = new Recurrence.DailyPattern();
+    	int repeatInterval = (int)event.getRepeatInterval();
+    	if (repeatInterval == 0) {
+    		repeatInterval = 1;
+    	}
+    	recurrence = new Recurrence.DailyPattern(event.getFromDateTime(),repeatInterval);
     } else {
       long repeatInterval = event.getRepeatInterval();
       if (repeatInterval == 0) {
