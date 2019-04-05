@@ -39,6 +39,7 @@ import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFo
 import microsoft.exchange.webservices.data.core.enumeration.search.ItemTraversal;
 import microsoft.exchange.webservices.data.core.enumeration.search.SortDirection;
 import microsoft.exchange.webservices.data.core.enumeration.service.SyncFolderItemsScope;
+import microsoft.exchange.webservices.data.core.enumeration.service.calendar.AppointmentType;
 import microsoft.exchange.webservices.data.core.enumeration.sync.ChangeType;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
 import microsoft.exchange.webservices.data.core.exception.service.remote.ServiceRemoteException;
@@ -50,6 +51,7 @@ import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema
 import microsoft.exchange.webservices.data.core.service.schema.ItemSchema;
 import microsoft.exchange.webservices.data.notification.ItemEvent;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
+import microsoft.exchange.webservices.data.property.complex.OccurrenceInfo;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
 import microsoft.exchange.webservices.data.search.ItemView;
 import microsoft.exchange.webservices.data.search.filter.SearchFilter;
@@ -206,17 +208,12 @@ public class UserIntegrationFacade {
         }
 
         try {
-          Date lastSynchronizedIterationDate = synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
-          lastSynchronizedDate = lastSynchronizedIterationDate == null
-              || (lastSynchronizedDate != null && lastSynchronizedIterationDate.after(lastSynchronizedDate))
-                                                                                                             ? lastSynchronizedDate
-                                                                                                             : lastSynchronizedIterationDate;
+          synchronizeExchangeAppointments(updatedExoEventIds, results.getItems());
         } catch (Exception e) {
           LOG.error("Error while synchronizing for user '{}' '{}' items from offset '{}'", username, pageSize, offset, e);
         }
 
-        if (!results.isMoreAvailable()
-            || (lastSynchronizedDate != null && firstSynchronizationUntilDate.after(lastSynchronizedDate))) {
+        if (!results.isMoreAvailable()) {
           break;
         }
 
@@ -224,10 +221,9 @@ public class UserIntegrationFacade {
         view.setOffset(offset);
       }
 
-      LOG.debug("Full exchange calendar synchronization processed successfully for user '{}' for exchange calendar {}, last synchronized event start date: '{}'",
+      LOG.debug("Full exchange calendar synchronization processed successfully for user '{}' for exchange calendar '{}',",
                 username,
-                folderId.getFolderName() == null ? folderId.getUniqueId() : folderId.getFolderName(),
-                lastSynchronizedDate == null ? "NO DATE" : lastSynchronizedDate);
+                folderId.getFolderName() == null ? folderId.getUniqueId() : folderId.getFolderName());
       setSynchState(folderId, syncState);
     } else {
       LOG.debug("Synchronize last modified events since last synchronization for user '{}'", username);
@@ -612,7 +608,7 @@ public class UserIntegrationFacade {
     }
   }
 
-  private Date synchronizeExchangeAppointments(List<String> eventIds, Iterable<Item> items) throws Exception,
+  private void synchronizeExchangeAppointments(List<String> eventIds, Iterable<Item> items) throws Exception,
                                                                                             ServiceLocalException {
     Date lastSynchronizedDate = null;
     for (Item item : items) {
@@ -620,16 +616,32 @@ public class UserIntegrationFacade {
         Appointment appointment = (Appointment) item;
         Date startTime = appointment.getStart();
 
-        if (lastSynchronizedDate == null || lastSynchronizedDate.before(startTime)) {
-          lastSynchronizedDate = startTime;
-        }
-
-        if (firstSynchronizationUntilDate.after(startTime)) {
-          LOG.info("Ignore calendar event '{}' because its start date {} is after limit date {}",
-                   appointment.getSubject(),
-                   startTime,
-                   firstSynchronizationUntilDate);
-          continue;
+        if (appointment.getAppointmentType() == AppointmentType.RecurringMaster) {
+          appointment = Appointment.bind(appointment.getService(),
+                                         appointment.getId(),
+                                         new PropertySet(AppointmentSchema.LastOccurrence));
+          OccurrenceInfo lastOccurrenceInfo = appointment.getLastOccurrence();
+          appointment = Appointment.bind(appointment.getService(),
+                                         appointment.getId(),
+                                         new PropertySet(BasePropertySet.FirstClassProperties));
+          if (lastOccurrenceInfo != null) {
+            Date lastOccurrenceEndDate = lastOccurrenceInfo.getEnd();
+            if (lastOccurrenceEndDate.before(firstSynchronizationUntilDate)) {
+              LOG.info("Ignore calendar event '{}'  because it's a recurrent event and its end date {} is before limit date {}",
+                       appointment.getSubject(),
+                       lastOccurrenceEndDate,
+                       firstSynchronizationUntilDate);
+              continue;
+            }
+          }
+        } else {
+          if (firstSynchronizationUntilDate.after(startTime)) {
+            LOG.info("Ignore calendar event '{}' because its start date {} is after limit date {}",
+                     appointment.getSubject(),
+                     startTime,
+                     firstSynchronizationUntilDate);
+            continue;
+          }
         }
 
         List<CalendarEvent> updatedEvents = null;
@@ -648,7 +660,6 @@ public class UserIntegrationFacade {
         LOG.warn("Item bound from exchange but not of type 'Appointment':" + item.getItemClass());
       }
     }
-    return lastSynchronizedDate;
   }
 
   /**
