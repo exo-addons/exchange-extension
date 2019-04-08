@@ -903,19 +903,13 @@ public class CalendarConverterUtils {
     List<String> participants = new ArrayList<String>();
     appointment = Appointment.bind(appointment.getService(),
                                    appointment.getId(),
-                                   new PropertySet(AppointmentSchema.RequiredAttendees));
+                                   new PropertySet(BasePropertySet.FirstClassProperties,
+                                                   AppointmentSchema.RequiredAttendees,
+                                                   AppointmentSchema.OptionalAttendees,
+                                                   AppointmentSchema.Resources));
     AttendeeCollection requiredAttendees = appointment.getRequiredAttendees();
-    appointment = Appointment.bind(appointment.getService(),
-                                   appointment.getId(),
-                                   new PropertySet(AppointmentSchema.OptionalAttendees));
     AttendeeCollection optiponalAttendees = appointment.getOptionalAttendees();
-    appointment = Appointment.bind(appointment.getService(),
-                                   appointment.getId(),
-                                   new PropertySet(AppointmentSchema.Resources));
     AttendeeCollection resources = appointment.getResources();
-    appointment = Appointment.bind(appointment.getService(),
-                                   appointment.getId(),
-                                   new PropertySet(BasePropertySet.FirstClassProperties));
     addEventPartacipants(requiredAttendees, userHandler, query, participants);
     addEventPartacipants(optiponalAttendees, userHandler, query, participants);
     addEventPartacipants(resources, userHandler, query, participants);
