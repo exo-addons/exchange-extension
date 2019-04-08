@@ -894,16 +894,25 @@ public class CalendarConverterUtils {
 
   private static void setEventParticipants(CalendarEvent calendarEvent,
                                            Appointment appointment,
-                                           UserHandler userHandler) throws ServiceLocalException {
+                                           UserHandler userHandler) throws Exception {
     Query query = queryThreadLocal.get();
     if (query == null) {
       query = new Query();
       queryThreadLocal.set(query);
     }
     List<String> participants = new ArrayList<String>();
-    addEventPartacipants(appointment.getRequiredAttendees(), userHandler, query, participants);
-    addEventPartacipants(appointment.getOptionalAttendees(), userHandler, query, participants);
-    addEventPartacipants(appointment.getResources(), userHandler, query, participants);
+    appointment = Appointment.bind(appointment.getService(),
+                                   appointment.getId(),
+                                   new PropertySet(BasePropertySet.FirstClassProperties,
+                                                   AppointmentSchema.RequiredAttendees,
+                                                   AppointmentSchema.OptionalAttendees,
+                                                   AppointmentSchema.Resources));
+    AttendeeCollection requiredAttendees = appointment.getRequiredAttendees();
+    AttendeeCollection optiponalAttendees = appointment.getOptionalAttendees();
+    AttendeeCollection resources = appointment.getResources();
+    addEventPartacipants(requiredAttendees, userHandler, query, participants);
+    addEventPartacipants(optiponalAttendees, userHandler, query, participants);
+    addEventPartacipants(resources, userHandler, query, participants);
     if (participants.size() > 0) {
       calendarEvent.setParticipant(participants.toArray(new String[0]));
       List<String> participantsStatuses =
