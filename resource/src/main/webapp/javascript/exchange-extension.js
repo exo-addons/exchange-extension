@@ -176,4 +176,4 @@ require(["SHARED/jquery"], function( $ ) {
 	} else if ( document.attachEvent ) {
 		window.attachEvent( "onload", addExchangeButton );
 	}
-})
+});
