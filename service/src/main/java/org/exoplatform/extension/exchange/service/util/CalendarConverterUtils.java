@@ -84,7 +84,12 @@ public class CalendarConverterUtils {
       event.setCalType("" + org.exoplatform.calendar.service.Calendar.TYPE_PRIVATE);
     }
     event.setLocation(appointment.getLocation());
-    event.setSummary(appointment.getSubject());
+    if (appointment.getSubject() != null)
+    {
+      event.setSummary(appointment.getSubject());
+    } else {
+      event.setSummary("");
+    }
     setEventStatus(event, appointment);
     setEventDates(event, appointment);
     setEventPriority(event, appointment);
