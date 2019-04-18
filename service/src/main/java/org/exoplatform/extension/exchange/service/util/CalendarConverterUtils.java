@@ -16,6 +16,8 @@ import org.apache.tika.mime.MimeTypes;
 import org.exoplatform.calendar.service.*;
 import org.exoplatform.calendar.service.impl.JCRDataStorage;
 import org.exoplatform.calendar.service.impl.NewUserListener;
+import org.exoplatform.commons.utils.CommonsUtils;
+import org.exoplatform.commons.utils.DateUtils;
 import org.exoplatform.commons.utils.ListAccess;
 import org.exoplatform.extension.exchange.service.CorrespondenceService;
 import org.exoplatform.services.log.ExoLogger;
@@ -34,6 +36,7 @@ import microsoft.exchange.webservices.data.property.complex.*;
 import microsoft.exchange.webservices.data.property.complex.recurrence.DayOfTheWeekCollection;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence.*;
+import microsoft.exchange.webservices.data.property.complex.time.TimeZoneDefinition;
 
 /**
  * @author Boubaker Khanfir
@@ -179,6 +182,7 @@ public class CalendarConverterUtils {
           }
         }
         event.setRepeatByDay(daysList.toArray(new String[0]));
+        Utils.adaptRepeatRule(event, DEFAULT_TIME_ZONE , CalendarService.PERSISTED_TIMEZONE);
       }
     } else if (recurrence instanceof RelativeMonthlyPattern) {
       event.setRepeatType(CalendarEvent.RP_MONTHLY);
@@ -215,7 +219,6 @@ public class CalendarConverterUtils {
         dayPrefix = CalendarEvent.RP_WEEKLY_BYDAY[0];
         break;
       }
-
       event.setRepeatByDay(new String[] { exoIndex + dayPrefix });
       event.setRepeatByMonthDay(null);
     } else if (recurrence instanceof MonthlyPattern) {
@@ -228,6 +231,7 @@ public class CalendarConverterUtils {
         dayOfMonth = recurrence.getStartDate().getDate();
       }
       event.setRepeatByMonthDay(new long[] { dayOfMonth });
+      Utils.adaptRepeatRule(event, DEFAULT_TIME_ZONE , CalendarService.PERSISTED_TIMEZONE);
     } else if (recurrence instanceof YearlyPattern) {
       event.setRepeatType(CalendarEvent.RP_YEARLY);
 
@@ -451,6 +455,7 @@ public class CalendarConverterUtils {
         repeatInterval = 1;
       }
       if (repeatType.equals(CalendarEvent.RP_WEEKLY)) {
+        Utils.adaptRepeatRule(event, CalendarService.PERSISTED_TIMEZONE, DEFAULT_TIME_ZONE);
         List<DayOfTheWeek> daysOfTheWeek = new ArrayList<DayOfTheWeek>();
         String[] repeatDays = event.getRepeatByDay();
         if (repeatDays != null) {
@@ -478,6 +483,7 @@ public class CalendarConverterUtils {
                                                   (int) repeatInterval,
                                                   daysOfTheWeek.toArray(new DayOfTheWeek[0]));
       } else if (repeatType.equals(CalendarEvent.RP_MONTHLY)) {
+        Utils.adaptRepeatRule(event, CalendarService.PERSISTED_TIMEZONE, DEFAULT_TIME_ZONE);
         long[] repeatByMonthDay = event.getRepeatByMonthDay();
         if ((repeatByMonthDay == null || repeatByMonthDay.length == 0)
             && (event.getRepeatByDay() == null || event.getRepeatByDay().length == 0)) {
@@ -1047,7 +1053,7 @@ public class CalendarConverterUtils {
       end = getCalendarInstance(calendarEvent.getToDateTime());
       appointment.setEnd(end.getTime());
     }
-  }
+}
 
   private static long getDiffDays(Appointment appointment, Calendar start, Calendar end) throws ServiceLocalException {
     LocalDate startLocalDate = LocalDate.of(start.get(Calendar.YEAR),
@@ -1061,30 +1067,16 @@ public class CalendarConverterUtils {
     Calendar cal1 = null;
     Calendar cal2 = getCalendarInstance(appointment.getEnd());
 
-    if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster) && appointment.getIsAllDayEvent()) {
+    if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster)) {
       cal1 = getCalendarInstance(appointment.getRecurrence().getStartDate());
     } else {
       cal1 = getCalendarInstance(appointment.getStart());
     }
-
     if (appointment.getIsAllDayEvent()) {
-      cal1.set(Calendar.HOUR_OF_DAY, 0);
-      cal1.set(Calendar.MINUTE, 0);
-      cal1.set(Calendar.SECOND, 0);
-      cal1.set(Calendar.MILLISECOND, 0);
-
-      cal2.add(Calendar.MILLISECOND, -1);
-      cal2.set(Calendar.HOUR_OF_DAY, cal2.getActualMaximum(Calendar.HOUR_OF_DAY));
-      cal2.set(Calendar.MINUTE, cal2.getActualMaximum(Calendar.MINUTE));
-      cal2.set(Calendar.SECOND, cal2.getActualMaximum(Calendar.SECOND));
-
-      calendarEvent.setFromDateTime(cal1.getTime());
-      calendarEvent.setToDateTime(cal2.getTime());
-    } else {
-      calendarEvent.setFromDateTime(cal1.getTime());
-      calendarEvent.setToDateTime(cal2.getTime());
+      cal2.setTimeInMillis(cal2.getTimeInMillis() - 60);
     }
-
+    calendarEvent.setFromDateTime(cal1.getTime());
+    calendarEvent.setToDateTime(cal2.getTime());
   }
 
   public static Calendar getCalendarInstance(Date date) {
