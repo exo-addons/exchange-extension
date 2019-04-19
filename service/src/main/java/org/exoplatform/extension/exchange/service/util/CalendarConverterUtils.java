@@ -331,9 +331,8 @@ public class CalendarConverterUtils {
                         tmpEvent.getSummary(),
                         tmpEvent.getRecurrenceId());
             }
-          updatedEvents.add(tmpEvent1);
-          occurenceAppointments.add(occurenceAppointment);
-          calendarEvents.add(tmpEvent);
+            updatedEvents.add(tmpEvent1);
+            calendarEvents.add(tmpEvent);
           } else {
             if (LOG.isDebugEnabled()) {
               LOG.debug("UPDATE exo calendar for user {} - Occurence event: {}, with recurence id: {}",
@@ -342,9 +341,9 @@ public class CalendarConverterUtils {
                         tmpEvent.getRecurrenceId());
             }
             convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler);
-          updatedEvents.add(tmpEvent);
-          occurenceAppointments.add(occurenceAppointment);
+            updatedEvents.add(tmpEvent);
           }
+          occurenceAppointments.add(occurenceAppointment);
 
         }
       }
