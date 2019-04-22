@@ -1067,14 +1067,9 @@ public class CalendarConverterUtils {
   }
 
   private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
-    Calendar cal1 = null;
+    Calendar cal1 = getCalendarInstance(appointment.getStart());
     Calendar cal2 = getCalendarInstance(appointment.getEnd());
 
-    if (appointment.getAppointmentType().equals(AppointmentType.RecurringMaster)) {
-      cal1 = getCalendarInstance(appointment.getRecurrence().getStartDate());
-    } else {
-      cal1 = getCalendarInstance(appointment.getStart());
-    }
     if (appointment.getIsAllDayEvent()) {
       cal2.setTimeInMillis(cal2.getTimeInMillis() - 60);
     }
