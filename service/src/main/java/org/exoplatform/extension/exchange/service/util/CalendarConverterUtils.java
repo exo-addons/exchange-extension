@@ -293,6 +293,7 @@ public class CalendarConverterUtils {
     masterAppointment = Appointment.bind(masterAppointment.getService(),
                                          masterAppointment.getId(),
                                          new PropertySet(AppointmentSchema.ModifiedOccurrences));
+    List<CalendarEvent> calendarEvents = new ArrayList<CalendarEvent>();
     {
       OccurrenceInfoCollection occurrenceInfoCollection = masterAppointment.getModifiedOccurrences();
       if (occurrenceInfoCollection != null && occurrenceInfoCollection.getCount() > 0) {
@@ -318,18 +319,20 @@ public class CalendarConverterUtils {
             continue;
           }
           if (tmpEvent == null || tmpEvent.getIsExceptionOccurrence() == null || !tmpEvent.getIsExceptionOccurrence()) {
-            tmpEvent = new CalendarEvent();
-            convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler);
-            tmpEvent.setRecurrenceId(RECURRENCE_ID_FORMAT.format(tmpEvent.getFromDateTime()));
-            tmpEvent.setRepeatType(CalendarEvent.RP_NOREPEAT);
-            tmpEvent.setId(masterEvent.getId());
-            tmpEvent.setCalendarId(masterEvent.getCalendarId());
+            CalendarEvent tmpEvent1 = new CalendarEvent();
+            convertExchangeToExoEvent(tmpEvent1, occurenceAppointment, username, storage, userHandler);
+            tmpEvent1.setRecurrenceId(RECURRENCE_ID_FORMAT.format(tmpEvent.getFromDateTime()));
+            tmpEvent1.setRepeatType(CalendarEvent.RP_NOREPEAT);
+            tmpEvent1.setId(masterEvent.getId());
+            tmpEvent1.setCalendarId(masterEvent.getCalendarId());
             if (LOG.isDebugEnabled()) {
               LOG.debug("CREATE exo calendar for user {} - Occurence event: {}, with recurence id: {}",
                         username,
                         tmpEvent.getSummary(),
                         tmpEvent.getRecurrenceId());
             }
+            updatedEvents.add(tmpEvent1);
+            calendarEvents.add(tmpEvent);
           } else {
             if (LOG.isDebugEnabled()) {
               LOG.debug("UPDATE exo calendar for user {} - Occurence event: {}, with recurence id: {}",
@@ -338,9 +341,10 @@ public class CalendarConverterUtils {
                         tmpEvent.getRecurrenceId());
             }
             convertExchangeToExoEvent(tmpEvent, occurenceAppointment, username, storage, userHandler);
+            updatedEvents.add(tmpEvent);
           }
-          updatedEvents.add(tmpEvent);
           occurenceAppointments.add(occurenceAppointment);
+
         }
       }
     }
@@ -348,7 +352,6 @@ public class CalendarConverterUtils {
                                          masterAppointment.getId(),
                                          new PropertySet(AppointmentSchema.DeletedOccurrences));
 
-    List<CalendarEvent> calendarEvents = new ArrayList<CalendarEvent>();
     DeletedOccurrenceInfoCollection deletedOccurrenceInfoCollection = masterAppointment.getDeletedOccurrences();
     if (deletedOccurrenceInfoCollection != null && deletedOccurrenceInfoCollection.getCount() > 0) {
       for (DeletedOccurrenceInfo occurrenceInfo : deletedOccurrenceInfoCollection) {
