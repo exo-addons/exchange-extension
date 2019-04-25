@@ -19,6 +19,7 @@ import org.exoplatform.calendar.service.impl.NewUserListener;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.commons.utils.DateUtils;
 import org.exoplatform.commons.utils.ListAccess;
+import org.exoplatform.container.PortalContainer;
 import org.exoplatform.extension.exchange.service.CorrespondenceService;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -58,6 +59,7 @@ public class CalendarConverterUtils {
 
   private static final String             EXCHANGE_EVENT_ID_PREFIX      = "ExcangeEvent";
 
+
   // Reuse the object and save memory instead of instantiating this every call
   private static final ThreadLocal<Query> queryThreadLocal              = new ThreadLocal<>();
 
@@ -94,7 +96,7 @@ public class CalendarConverterUtils {
       event.setSummary("");
     }
     setEventStatus(event, appointment);
-    setEventDates(event, appointment);
+    setEventDates(event, appointment, username);
     setEventPriority(event, appointment);
     setEventCategory(event, appointment, username, storage);
     setEventParticipants(event, appointment, userHandler);
@@ -1066,15 +1068,37 @@ public class CalendarConverterUtils {
     return ChronoUnit.DAYS.between(startLocalDate, endLocalDate);
   }
 
-  private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment) throws ServiceLocalException {
+  private static void setEventDates(CalendarEvent calendarEvent, Appointment appointment, String username) throws Exception {
     Calendar cal1 = getCalendarInstance(appointment.getStart());
     Calendar cal2 = getCalendarInstance(appointment.getEnd());
 
     if (appointment.getIsAllDayEvent()) {
+      appointment = Appointment.bind(appointment.getService(),
+                                     appointment.getId(),
+                                     new PropertySet(BasePropertySet.FirstClassProperties,
+                                                     AppointmentSchema.StartTimeZone,
+                                                     AppointmentSchema.EndTimeZone));
+      String startTimeZoneId = TimeUtil.TIMEZONE_MAPPINGS.get(appointment.getStartTimeZone().id);
+      String endTimeZoneId = TimeUtil.TIMEZONE_MAPPINGS.get(appointment.getEndTimeZone().id);
+      cal1.setTimeZone(DateUtils.getTimeZone(startTimeZoneId));
+      cal2.setTimeZone(DateUtils.getTimeZone(endTimeZoneId));
       cal2.setTimeInMillis(cal2.getTimeInMillis() - 60);
+
+      int offsetExchangeTimeZone = DateUtils.getTimeZone(startTimeZoneId).getOffset(cal1.getTimeInMillis());
+
+      CalendarSetting calendarSetting = getCalendarService().getCalendarSetting(username);
+      int offsetExoTimeZone = DateUtils.getTimeZone(calendarSetting.getTimeZone()).getOffset(cal1.getTimeInMillis());
+
+      cal1.setTimeInMillis(cal1.getTimeInMillis() + offsetExchangeTimeZone - offsetExoTimeZone);
+      cal2.setTimeInMillis(cal2.getTimeInMillis() + offsetExchangeTimeZone - offsetExoTimeZone);
     }
+
     calendarEvent.setFromDateTime(cal1.getTime());
     calendarEvent.setToDateTime(cal2.getTime());
+  }
+  
+  static public CalendarService getCalendarService() {
+    return (CalendarService)PortalContainer.getInstance().getComponentInstance(CalendarService.class);
   }
 
   public static Calendar getCalendarInstance(Date date) {
