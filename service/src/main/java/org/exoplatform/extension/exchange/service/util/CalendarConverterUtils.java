@@ -60,7 +60,7 @@ public class CalendarConverterUtils {
   private static final String             EXCHANGE_EVENT_ID_PREFIX      = "ExcangeEvent";
 
   // This variable is used to save the time zone used in exchange server
-  private static String                   EXCHANGE_REMOTE_TIME_ZONE     = "GMT";
+  private static String                   exchange_remote_time_zone     = "GMT";
 
   // Reuse the object and save memory instead of instantiating this every call
   private static final ThreadLocal<Query> queryThreadLocal              = new ThreadLocal<>();
@@ -464,7 +464,7 @@ public class CalendarConverterUtils {
         repeatInterval = 1;
       }
       if (repeatType.equals(CalendarEvent.RP_WEEKLY)) {
-        TimeZone exchangeTimeZone = getExchangeTimeZone(username);   
+        TimeZone exchangeTimeZone = getExchangeTimeZone();   
         Utils.adaptRepeatRule(event, CalendarService.PERSISTED_TIMEZONE, exchangeTimeZone);
         List<DayOfTheWeek> daysOfTheWeek = new ArrayList<DayOfTheWeek>();
         String[] repeatDays = event.getRepeatByDay();
@@ -493,7 +493,7 @@ public class CalendarConverterUtils {
                                                   (int) repeatInterval,
                                                   daysOfTheWeek.toArray(new DayOfTheWeek[0]));
       } else if (repeatType.equals(CalendarEvent.RP_MONTHLY)) {
-        TimeZone exchangeTimeZone = getExchangeTimeZone(username);
+        TimeZone exchangeTimeZone = getExchangeTimeZone();
         Utils.adaptRepeatRule(event, CalendarService.PERSISTED_TIMEZONE, exchangeTimeZone);
         long[] repeatByMonthDay = event.getRepeatByMonthDay();
         if ((repeatByMonthDay == null || repeatByMonthDay.length == 0)
@@ -1031,7 +1031,7 @@ public class CalendarConverterUtils {
     Calendar start = Calendar.getInstance();
     Calendar end = Calendar.getInstance();
     if(isAllDay) {
-      TimeZone exchangeTimeZone = getExchangeTimeZone(username);
+      TimeZone exchangeTimeZone = getExchangeTimeZone();
       TimeZone exoTimeZone = getUserTimeZone(username);
       start.setTimeInMillis(calendarEvent.getFromDateTime().getTime());
       end.setTimeInMillis(calendarEvent.getToDateTime().getTime());
@@ -1081,8 +1081,8 @@ public class CalendarConverterUtils {
       String startTimeZoneId = TimeUtil.TIMEZONE_MAPPINGS.get(appointment.getStartTimeZone().id);
       String endTimeZoneId = TimeUtil.TIMEZONE_MAPPINGS.get(appointment.getEndTimeZone().id);
       // Update the value of EXCHANGE_REMOTE_TIME_ZONE
-      if (!EXCHANGE_REMOTE_TIME_ZONE.equals(appointment.getStartTimeZone().id)) {
-        EXCHANGE_REMOTE_TIME_ZONE = appointment.getStartTimeZone().id;
+      if (!exchange_remote_time_zone.equals(appointment.getStartTimeZone().id)) {
+        exchange_remote_time_zone = appointment.getStartTimeZone().id;
       }
       cal1.setTimeZone(DateUtils.getTimeZone(startTimeZoneId));
       cal2.setTimeZone(DateUtils.getTimeZone(endTimeZoneId));
@@ -1335,11 +1335,11 @@ public class CalendarConverterUtils {
     return userTimeZone;
   }
 
-  private static TimeZone getExchangeTimeZone(String username) {
-    String exchangeTimeZoneId = TimeUtil.TIMEZONE_MAPPINGS.get(EXCHANGE_REMOTE_TIME_ZONE);
+  private static TimeZone getExchangeTimeZone() {
+    String exchangeTimeZoneId = TimeUtil.TIMEZONE_MAPPINGS.get(exchange_remote_time_zone);
     TimeZone exchangeTimeZone = null;
     if (exchangeTimeZoneId != null) {
-      exchangeTimeZone = DateUtils.getTimeZone(TimeUtil.TIMEZONE_MAPPINGS.get(EXCHANGE_REMOTE_TIME_ZONE));
+      exchangeTimeZone = DateUtils.getTimeZone(TimeUtil.TIMEZONE_MAPPINGS.get(exchange_remote_time_zone));
     } else {
       exchangeTimeZone = DEFAULT_TIME_ZONE;
     }
