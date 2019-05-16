@@ -14,7 +14,6 @@ require(["SHARED/jquery"], function( $ ) {
 				if(!data || data.length == 0) {
 					$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange-disabled.png');
 					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html('<div class="ExchangeSettingsError">Failed to connect</div>');
-					$(".ExchangeEditSettingsPanel").hide();
 				} else {
 					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html("<div class='ExchangeSyncNowButton'>Refresh</div>");
 					$('.ExchangeSettingsButton img').attr('src', '/exchange-resources/skin/images/exchange.png');
