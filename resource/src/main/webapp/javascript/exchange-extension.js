@@ -159,7 +159,7 @@ require(["SHARED/jquery"], function( $ ) {
 					$('.ExchangeSettingsButton').click();
 				},
 				error: function(errMsg) {
-					$('.ExchangeSettingsWindow .ExchangeSettingsContent').html('<div class="ExchangeSettingsError">Error getting settings from eXo Server.</div>');
+					$('.ExchangeSettingsButton').click();
 				}
 			});
 		});
