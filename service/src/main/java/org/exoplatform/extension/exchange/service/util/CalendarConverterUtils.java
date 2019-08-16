@@ -809,6 +809,38 @@ public class CalendarConverterUtils {
     return occEvent;
   }
 
+  public static Collection<CalendarEvent> getOccurencesBetweenDates(String username,
+                                                                    JCRDataStorage storage,
+                                                                    CalendarEvent masterEvent,
+                                                                    Date originalStart, Date toDate) throws Exception {
+    Calendar from = Calendar.getInstance();
+    from.setTime(originalStart);
+    from.set(Calendar.HOUR_OF_DAY, 0);
+    from.set(Calendar.MINUTE, 0);
+    from.set(Calendar.SECOND, 0);
+    from.set(Calendar.MILLISECOND, 0);
+
+    Calendar to = Calendar.getInstance();
+    if (toDate == null) {
+      to.setTime(originalStart);
+      setEndOfDay(to);
+    } else {
+      to.setTime(toDate);
+      to.set(Calendar.HOUR_OF_DAY, 0);
+      to.set(Calendar.MINUTE, 0);
+      to.set(Calendar.SECOND, 0);
+      to.set(Calendar.MILLISECOND, 0);
+    }
+
+    CalendarSetting calendarSetting = storage.getCalendarSetting(username);
+    Map<String, CalendarEvent> map = storage.getOccurrenceEvents(masterEvent, from, to, calendarSetting.getTimeZone());
+    Collection<CalendarEvent> occEvent = null;
+    if (map != null && !map.isEmpty()) {
+      occEvent = map.values();
+    }
+    return occEvent;
+  }
+
   private static void setEndOfDay(Calendar to) {
     to.set(Calendar.HOUR_OF_DAY, to.getActualMaximum(Calendar.HOUR_OF_DAY));
     to.set(Calendar.MINUTE, to.getActualMaximum(Calendar.MINUTE));

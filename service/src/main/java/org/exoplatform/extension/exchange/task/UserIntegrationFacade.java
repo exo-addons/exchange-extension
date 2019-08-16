@@ -370,9 +370,9 @@ public class UserIntegrationFacade {
       Appointment appointment = (Appointment) item;
       String eventId = correspondenceService.getCorrespondingId(username, appointment.getId().getUniqueId());
       if (eventId == null) {
-        updatedEvents = exoStorageService.createEvent(appointment, username);
+        updatedEvents = exoStorageService.createEvent(appointment, username, firstSynchronizationUntilDate);
       } else {
-        updatedEvents = exoStorageService.updateEvent(appointment, username);
+        updatedEvents = exoStorageService.updateEvent(appointment, username, firstSynchronizationUntilDate);
       }
     }
 
@@ -653,6 +653,13 @@ public class UserIntegrationFacade {
 
         if (updatedEvents != null && !updatedEvents.isEmpty()) {
           for (CalendarEvent calendarEvent : updatedEvents) {
+            Date fromDate = calendarEvent.getFromDateTime();
+            if (!CalendarEvent.RP_NOREPEAT.equals(calendarEvent.getRepeatType()) && firstSynchronizationUntilDate.after(fromDate)) {
+              for (CalendarEvent oldOccurence : CalendarConverterUtils.getOccurencesBetweenDates(username,
+                  ((CalendarServiceImpl) calendarService).getDataStorage(), calendarEvent, fromDate, firstSynchronizationUntilDate)) {
+                calendarService.removeOneOccurrenceEvent(calendarEvent, oldOccurence, username);
+              }
+            }
             eventIds.add(calendarEvent.getId());
           }
         }

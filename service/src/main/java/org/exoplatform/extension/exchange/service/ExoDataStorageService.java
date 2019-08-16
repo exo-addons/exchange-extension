@@ -253,8 +253,8 @@ public class ExoDataStorageService implements Serializable {
    * @param username
    * @throws Exception
    */
-  public List<CalendarEvent> updateEvent(Appointment appointment, String username) throws Exception {
-    return createOrUpdateEvent(appointment, username, false);
+  public List<CalendarEvent> updateEvent(Appointment appointment, String username, Date firstSyncDate) throws Exception {
+    return createOrUpdateEvent(appointment, username, false, firstSyncDate);
   }
 
   /**
@@ -264,8 +264,8 @@ public class ExoDataStorageService implements Serializable {
    * @param username
    * @throws Exception
    */
-  public List<CalendarEvent> createEvent(Appointment appointment, String username) throws Exception {
-    return createOrUpdateEvent(appointment, username, true);
+  public List<CalendarEvent> createEvent(Appointment appointment, String username, Date firstSyncDate) throws Exception {
+    return createOrUpdateEvent(appointment, username, true, firstSyncDate);
   }
 
   /**
@@ -288,10 +288,10 @@ public class ExoDataStorageService implements Serializable {
     }
 
     try {
-      return createOrUpdateEvent(appointment, username, isNew);
+      return createOrUpdateEvent(appointment, username, isNew, new Date());
     } catch (ServiceRemoteException e) {
       // Reattempt saving event if the connection is interrupted
-      return createOrUpdateEvent(appointment, username, isNew);
+      return createOrUpdateEvent(appointment, username, isNew, new Date());
     }
   }
 
@@ -417,7 +417,7 @@ public class ExoDataStorageService implements Serializable {
     }
   }
 
-  private List<CalendarEvent> createOrUpdateEvent(Appointment appointment, String username, boolean isNew) throws Exception {
+  private List<CalendarEvent> createOrUpdateEvent(Appointment appointment, String username, boolean isNew, Date firstSyncDate) throws Exception {
     Calendar calendar = getUserCalendar(username, appointment.getParentFolderId().getUniqueId());
     if (calendar == null) {
       LOG.warn("Attempting to synchronize an event without existing associated eXo Calendar.");
@@ -470,8 +470,15 @@ public class ExoDataStorageService implements Serializable {
             CalendarEvent storedEvent = getExoCalendarDataStorage().getEvent(username, event.getId());
             isNew = storedEvent == null;
           }
-
-          getExoCalendarDataStorage().saveUserEvent(username, calendar.getId(), event, isNew);
+          if (firstSyncDate.after(event.getFromDateTime())) {
+            if (isNew) {
+              updatedEvents.remove(event);
+            } else {
+              getExoCalendarDataStorage().removeUserEvent(username, calendar.getId(), event.getId());
+            }
+          } else {
+            getExoCalendarDataStorage().saveUserEvent(username, calendar.getId(), event, isNew);
+          }
         } catch (ItemExistsException e) {
           if (LOG.isDebugEnabled()) {
             LOG.warn("Event with id {} seems to exists already, ignore it", event.getId());
